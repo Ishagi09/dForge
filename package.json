@@ -1,0 +1,32 @@
+{
+  "name": "cert-verify",
+  "version": "1.0.0",
+  "description": "On-chain certificate issuance and verification built with Hardhat and Solidity",
+  "main": "index.js",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "test:gas": "cross-env REPORT_GAS=true hardhat test",
+    "node": "hardhat node",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
+    "issue:sepolia": "hardhat run scripts/issue-certificate.js --network sepolia",
+    "clean": "hardhat clean"
+  },
+  "keywords": [
+    "solidity",
+    "hardhat",
+    "ethereum",
+    "certificates",
+    "verification"
+  ],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "cross-env": "^10.1.0",
+    "dotenv": "^17.4.2",
+    "hardhat": "^2.29.1"
+  }
+}
