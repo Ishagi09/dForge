@@ -1,10 +1,15 @@
 # Smart Certificate Verification
 
-On-chain certificate issuance and verification, built with Hardhat and Solidity 0.8.24.
+On-chain certificate issuance and verification — a Solidity contract (Hardhat) plus a React
+frontend, deployed on Ethereum Sepolia.
 
-An authorized issuer (a university, training provider, employer) issues a certificate to a
-recipient. Anyone holding the resulting certificate ID can verify it — no trust in the issuer's
-website or database required. Certificates can be revoked, and can optionally expire.
+Every certificate is bound to the **SHA-256 hash of its document**. An authorized issuer registers
+a file's hash on-chain; anyone later holding that file can hash it in their browser and check the
+result against the contract. If the document was altered by even one byte, the hash won't match and
+verification fails. No trust in the issuer's website or database required.
+
+**Live contract:** [`0xa62ae72D24AFE719e923Bac1C716752437E498c2`](https://sepolia.etherscan.io/address/0xa62ae72D24AFE719e923Bac1C716752437E498c2#code)
+(verified source on Sepolia Etherscan)
 
 ## Contract overview
 
@@ -12,10 +17,12 @@ website or database required. Certificates can be revoked, and can optionally ex
 
 | Function | Who can call | Purpose |
 | --- | --- | --- |
-| `issueCertificate(recipient, recipientName, courseName, metadataURI, expiresAt)` | authorized issuers | Issue one certificate, returns its ID |
-| `issueBatch(recipients[], recipientNames[], courseName, metadataURI, expiresAt)` | authorized issuers | Issue the same course to many recipients |
-| `revokeCertificate(id)` | the issuing issuer, or owner | Permanently invalidate a certificate |
-| `verifyCertificate(id)` | anyone | Returns `(valid, status, certificate)` |
+| `issueCertificate(fileHash, recipient, recipientName, courseName, metadataURI, expiresAt)` | authorized issuers | Certify one document, returns the certificate ID |
+| `issueBatch(fileHashes[], recipients[], recipientNames[], courseName, metadataURI, expiresAt)` | authorized issuers | Certify many documents for one course |
+| `verifyByFileHash(fileHash)` | anyone | **The main entry point.** Returns `(valid, status, certificateId, certificate)` |
+| `verifyCertificate(id)` | anyone | Same, looked up by certificate ID |
+| `certificateIdByFileHash(fileHash)` | anyone | The ID registered for a document, or zero |
+| `revokeCertificate(id)` / `revokeByFileHash(hash)` | issuing issuer, or owner | Permanently invalidate a certificate |
 | `isValid(id)` / `statusOf(id)` | anyone | Lightweight validity checks |
 | `getCertificate(id)` | anyone | Full certificate data (reverts if unknown) |
 | `certificatesOf(wallet)` | anyone | Every certificate ID held by a wallet |
@@ -26,9 +33,11 @@ website or database required. Certificates can be revoked, and can optionally ex
 
 Notes on the design:
 
+- **One certificate per document.** Re-issuing an already-certified file reverts with
+  `FileHashAlreadyRegistered`.
 - **Certificate IDs** are `keccak256` over an incrementing nonce plus the contract address, chain
-  ID, issuer, recipient and names — using `abi.encode`, not `abi.encodePacked`, so two adjacent
-  string fields cannot collide. The nonce means identical certificates issued in the same block
+  ID, issuer, recipient and file hash — using `abi.encode`, not `abi.encodePacked`, so two adjacent
+  dynamic fields cannot collide. The nonce means identical certificates issued in the same block
   still get distinct IDs.
 - **`expiresAt = 0`** means the certificate never expires.
 - **`recipient = address(0)`** issues a certificate not bound to any wallet; only non-zero
@@ -40,14 +49,46 @@ Notes on the design:
 ```bash
 npm install
 npm run compile
-npm test
+npm test          # 28 tests
 ```
+
+## Frontend
+
+A React + Vite app in `frontend/` with two pages:
+
+- **Verify** — upload a file, it's hashed locally with the Web Crypto API and checked against the
+  contract. Shows Valid / Revoked / Expired / Not Found with the certificate details. Works with no
+  wallet installed (reads go through a public RPC).
+- **Issue** — connect MetaMask, upload a file, fill in recipient and course, and issue. Requires the
+  connected wallet to be an authorized issuer.
+
+```bash
+npm run frontend:dev     # http://localhost:5173
+npm run frontend:build
+```
+
+The ABI and contract address are generated into `frontend/src/contract/`. After any contract change
+or redeploy, regenerate them:
+
+```bash
+npm run export-abi
+```
+
+Override the defaults with a `frontend/.env` if needed:
+
+```
+VITE_CONTRACT_ADDRESS=0x...
+VITE_RPC_URL=https://your-sepolia-rpc
+```
+
+> The file itself never leaves the browser — only its hash is used. Hashing needs a secure context,
+> so it works on `localhost` and any `https://` deployment.
 
 ## Deploying to Sepolia
 
 ### 1. Fill in `.env`
 
-Copy `.env.example` to `.env` (already created for you) and fill in:
+Copy `.env.example` to `.env` and fill in:
 
 ```
 SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY
@@ -73,19 +114,23 @@ npm run deploy:sepolia
 The script preflights your `.env`, checks the deployer's balance, waits for 5 confirmations, and
 writes the address to `deployments/sepolia.json`.
 
-### 3. Verify the source on Etherscan (optional)
+### 3. Verify the source on Etherscan
 
 ```bash
 npx hardhat verify --network sepolia <deployed-address>
 ```
 
-### 4. Issue a test certificate
+Requires `ETHERSCAN_API_KEY`. Note the config uses a single top-level `apiKey` string — the
+per-network object form routes to Etherscan's retired v1 endpoint and fails.
+
+### 4. Certify a document from the CLI
 
 ```bash
-npm run issue:sepolia
+FILE=./diploma.pdf npm run issue:sepolia
 ```
 
-Override the defaults with env vars: `RECIPIENT_NAME`, `COURSE_NAME`, `RECIPIENT_ADDRESS`,
+Hashes the file, issues the certificate, then reads it back by hash — the same round trip the
+frontend performs. Override with `RECIPIENT_NAME`, `COURSE_NAME`, `RECIPIENT_ADDRESS`,
 `METADATA_URI`, `CONTRACT_ADDRESS`.
 
 ## Local development
@@ -100,8 +145,14 @@ npm run test:gas         # tests with a gas usage report
 
 ```
 contracts/SmartCertificateVerification.sol   the contract
-test/SmartCertificateVerification.js         21 tests
+test/SmartCertificateVerification.js         28 tests
 scripts/deploy.js                            deployment with preflight checks
-scripts/issue-certificate.js                 issue + verify against a deployment
+scripts/issue-certificate.js                 hash a file, issue, verify back
+scripts/export-abi.js                        copy ABI + address into the frontend
 deployments/<network>.json                   recorded addresses
+frontend/                                    React + Vite + Tailwind app
+  src/pages/Verify.jsx                       upload a file, check it on-chain
+  src/pages/Issue.jsx                        upload a file, certify it
+  src/lib/hash.js                            SHA-256 via Web Crypto
+  src/lib/contract.js                        ethers wiring, wallet, error decoding
 ```

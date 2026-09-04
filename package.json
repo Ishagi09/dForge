@@ -11,6 +11,9 @@
     "deploy:local": "hardhat run scripts/deploy.js --network localhost",
     "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
     "issue:sepolia": "hardhat run scripts/issue-certificate.js --network sepolia",
+    "export-abi": "hardhat run scripts/export-abi.js",
+    "frontend:dev": "npm --prefix frontend run dev",
+    "frontend:build": "npm --prefix frontend run build",
     "clean": "hardhat clean"
   },
   "keywords": [

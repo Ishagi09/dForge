@@ -4,6 +4,13 @@ const { loadFixture, time } = require("@nomicfoundation/hardhat-network-helpers"
 
 const Status = { NonExistent: 0n, Valid: 1n, Revoked: 2n, Expired: 3n };
 const NO_EXPIRY = 0;
+const ZERO_HASH = ethers.ZeroHash;
+
+// Stand-in for a real document's SHA-256; any distinct 32-byte value works here.
+let hashCounter = 0;
+function fileHash(label) {
+  return ethers.keccak256(ethers.toUtf8Bytes(label ?? `document-${hashCounter++}`));
+}
 
 describe("SmartCertificateVerification", function () {
   async function deployFixture() {
@@ -17,6 +24,7 @@ describe("SmartCertificateVerification", function () {
   // Issues a certificate and pulls the generated id back out of the event.
   async function issue(contract, signer, overrides = {}) {
     const args = {
+      fileHash: fileHash(),
       recipient: ethers.ZeroAddress,
       recipientName: "Alice",
       courseName: "Blockchain 101",
@@ -27,6 +35,7 @@ describe("SmartCertificateVerification", function () {
     const tx = await contract
       .connect(signer)
       .issueCertificate(
+        args.fileHash,
         args.recipient,
         args.recipientName,
         args.courseName,
@@ -43,7 +52,7 @@ describe("SmartCertificateVerification", function () {
         }
       })
       .find((e) => e && e.name === "CertificateIssued");
-    return event.args.certificateId;
+    return { id: event.args.certificateId, fileHash: args.fileHash };
   }
 
   describe("deployment", function () {
@@ -58,7 +67,7 @@ describe("SmartCertificateVerification", function () {
   describe("issuance", function () {
     it("issues a certificate that verifies as valid", async function () {
       const { contract, owner, alice } = await loadFixture(deployFixture);
-      const id = await issue(contract, owner, {
+      const { id, fileHash: fh } = await issue(contract, owner, {
         recipient: alice.address,
         metadataURI: "ipfs://QmExample",
       });
@@ -69,6 +78,7 @@ describe("SmartCertificateVerification", function () {
       expect(cert.recipientName).to.equal("Alice");
       expect(cert.courseName).to.equal("Blockchain 101");
       expect(cert.metadataURI).to.equal("ipfs://QmExample");
+      expect(cert.fileHash).to.equal(fh);
       expect(cert.issuer).to.equal(owner.address);
       expect(cert.recipient).to.equal(alice.address);
       expect(await contract.totalCertificates()).to.equal(1n);
@@ -78,9 +88,28 @@ describe("SmartCertificateVerification", function () {
       const { contract, owner } = await loadFixture(deployFixture);
       const first = await issue(contract, owner);
       const second = await issue(contract, owner);
-      expect(first).to.not.equal(second);
-      expect(await contract.isValid(first)).to.equal(true);
-      expect(await contract.isValid(second)).to.equal(true);
+      expect(first.id).to.not.equal(second.id);
+      expect(await contract.isValid(first.id)).to.equal(true);
+      expect(await contract.isValid(second.id)).to.equal(true);
+    });
+
+    it("rejects a zero file hash", async function () {
+      const { contract, owner } = await loadFixture(deployFixture);
+      await expect(issue(contract, owner, { fileHash: ZERO_HASH })).to.be.revertedWithCustomError(
+        contract,
+        "InvalidFileHash"
+      );
+    });
+
+    it("rejects a document that was already certified", async function () {
+      const { contract, owner } = await loadFixture(deployFixture);
+      const fh = fileHash("duplicate-doc");
+      await issue(contract, owner, { fileHash: fh });
+
+      await expect(issue(contract, owner, { fileHash: fh })).to.be.revertedWithCustomError(
+        contract,
+        "FileHashAlreadyRegistered"
+      );
     });
 
     it("rejects empty recipient or course names", async function () {
@@ -110,8 +139,10 @@ describe("SmartCertificateVerification", function () {
     });
 
     it("issues to many recipients in one batch", async function () {
-      const { contract, owner, alice, bob } = await loadFixture(deployFixture);
+      const { contract, alice, bob } = await loadFixture(deployFixture);
+      const hashes = [fileHash("batch-a"), fileHash("batch-b")];
       await contract.issueBatch(
+        hashes,
         [alice.address, bob.address],
         ["Alice", "Bob"],
         "Solidity 201",
@@ -122,8 +153,7 @@ describe("SmartCertificateVerification", function () {
       expect(await contract.totalCertificates()).to.equal(2n);
       expect(await contract.certificateCountOf(alice.address)).to.equal(1n);
 
-      const [bobId] = await contract.certificatesOf(bob.address);
-      const cert = await contract.getCertificate(bobId);
+      const [, , , cert] = await contract.verifyByFileHash(hashes[1]);
       expect(cert.recipientName).to.equal("Bob");
       expect(cert.courseName).to.equal("Solidity 201");
     });
@@ -131,8 +161,65 @@ describe("SmartCertificateVerification", function () {
     it("rejects a batch with mismatched array lengths", async function () {
       const { contract, alice, bob } = await loadFixture(deployFixture);
       await expect(
-        contract.issueBatch([alice.address, bob.address], ["Alice"], "Solidity 201", "", NO_EXPIRY)
+        contract.issueBatch(
+          [fileHash()],
+          [alice.address, bob.address],
+          ["Alice", "Bob"],
+          "Solidity 201",
+          "",
+          NO_EXPIRY
+        )
       ).to.be.revertedWithCustomError(contract, "LengthMismatch");
+    });
+  });
+
+  describe("verification by file hash", function () {
+    it("finds a certificate from its document hash alone", async function () {
+      const { contract, owner } = await loadFixture(deployFixture);
+      const { id, fileHash: fh } = await issue(contract, owner, { recipientName: "Dana" });
+
+      const [valid, status, certificateId, cert] = await contract.verifyByFileHash(fh);
+      expect(valid).to.equal(true);
+      expect(status).to.equal(Status.Valid);
+      expect(certificateId).to.equal(id);
+      expect(cert.recipientName).to.equal("Dana");
+      expect(await contract.certificateIdByFileHash(fh)).to.equal(id);
+    });
+
+    it("reports NonExistent for an uncertified document", async function () {
+      const { contract } = await loadFixture(deployFixture);
+      const [valid, status, certificateId] = await contract.verifyByFileHash(
+        fileHash("never-issued")
+      );
+      expect(valid).to.equal(false);
+      expect(status).to.equal(Status.NonExistent);
+      expect(certificateId).to.equal(ZERO_HASH);
+    });
+
+    it("reflects revocation when looked up by hash", async function () {
+      const { contract, owner } = await loadFixture(deployFixture);
+      const { fileHash: fh } = await issue(contract, owner);
+
+      await contract.revokeByFileHash(fh);
+
+      const [valid, status] = await contract.verifyByFileHash(fh);
+      expect(valid).to.equal(false);
+      expect(status).to.equal(Status.Revoked);
+    });
+
+    it("blocks unrelated accounts from revoking by hash", async function () {
+      const { contract, owner, stranger } = await loadFixture(deployFixture);
+      const { fileHash: fh } = await issue(contract, owner);
+      await expect(
+        contract.connect(stranger).revokeByFileHash(fh)
+      ).to.be.revertedWithCustomError(contract, "NotAuthorized");
+    });
+
+    it("rejects revoking an unknown document hash", async function () {
+      const { contract } = await loadFixture(deployFixture);
+      await expect(
+        contract.revokeByFileHash(fileHash("unknown"))
+      ).to.be.revertedWithCustomError(contract, "CertificateNotFound");
     });
   });
 
@@ -144,7 +231,7 @@ describe("SmartCertificateVerification", function () {
         .to.emit(contract, "IssuerAuthorized")
         .withArgs(issuer2.address);
 
-      const id = await issue(contract, issuer2);
+      const { id } = await issue(contract, issuer2);
       expect(await contract.isValid(id)).to.equal(true);
 
       await contract.revokeIssuer(issuer2.address);
@@ -154,7 +241,7 @@ describe("SmartCertificateVerification", function () {
     it("keeps certificates valid after their issuer is de-authorized", async function () {
       const { contract, issuer2 } = await loadFixture(deployFixture);
       await contract.authorizeIssuer(issuer2.address);
-      const id = await issue(contract, issuer2);
+      const { id } = await issue(contract, issuer2);
 
       await contract.revokeIssuer(issuer2.address);
       expect(await contract.isValid(id)).to.equal(true);
@@ -169,16 +256,17 @@ describe("SmartCertificateVerification", function () {
 
     it("rejects the zero address as an issuer", async function () {
       const { contract } = await loadFixture(deployFixture);
-      await expect(
-        contract.authorizeIssuer(ethers.ZeroAddress)
-      ).to.be.revertedWithCustomError(contract, "ZeroAddress");
+      await expect(contract.authorizeIssuer(ethers.ZeroAddress)).to.be.revertedWithCustomError(
+        contract,
+        "ZeroAddress"
+      );
     });
   });
 
   describe("revocation", function () {
     it("marks a revoked certificate as invalid", async function () {
       const { contract, owner } = await loadFixture(deployFixture);
-      const id = await issue(contract, owner);
+      const { id } = await issue(contract, owner);
 
       await expect(contract.revokeCertificate(id))
         .to.emit(contract, "CertificateRevoked")
@@ -192,7 +280,7 @@ describe("SmartCertificateVerification", function () {
     it("lets the contract owner revoke another issuer's certificate", async function () {
       const { contract, owner, issuer2 } = await loadFixture(deployFixture);
       await contract.authorizeIssuer(issuer2.address);
-      const id = await issue(contract, issuer2);
+      const { id } = await issue(contract, issuer2);
 
       await contract.connect(owner).revokeCertificate(id);
       expect(await contract.isValid(id)).to.equal(false);
@@ -200,7 +288,7 @@ describe("SmartCertificateVerification", function () {
 
     it("blocks unrelated accounts from revoking", async function () {
       const { contract, owner, stranger } = await loadFixture(deployFixture);
-      const id = await issue(contract, owner);
+      const { id } = await issue(contract, owner);
       await expect(
         contract.connect(stranger).revokeCertificate(id)
       ).to.be.revertedWithCustomError(contract, "NotAuthorized");
@@ -208,7 +296,7 @@ describe("SmartCertificateVerification", function () {
 
     it("rejects double revocation", async function () {
       const { contract, owner } = await loadFixture(deployFixture);
-      const id = await issue(contract, owner);
+      const { id } = await issue(contract, owner);
       await contract.revokeCertificate(id);
       await expect(contract.revokeCertificate(id)).to.be.revertedWithCustomError(
         contract,
@@ -218,11 +306,9 @@ describe("SmartCertificateVerification", function () {
 
     it("rejects revoking a certificate that does not exist", async function () {
       const { contract } = await loadFixture(deployFixture);
-      const fakeId = ethers.keccak256(ethers.toUtf8Bytes("nope"));
-      await expect(contract.revokeCertificate(fakeId)).to.be.revertedWithCustomError(
-        contract,
-        "CertificateNotFound"
-      );
+      await expect(
+        contract.revokeCertificate(fileHash("nope"))
+      ).to.be.revertedWithCustomError(contract, "CertificateNotFound");
     });
   });
 
@@ -230,7 +316,7 @@ describe("SmartCertificateVerification", function () {
     it("reports a certificate as expired once its expiry passes", async function () {
       const { contract, owner } = await loadFixture(deployFixture);
       const expiresAt = (await time.latest()) + 3600;
-      const id = await issue(contract, owner, { expiresAt });
+      const { id } = await issue(contract, owner, { expiresAt });
 
       expect(await contract.isValid(id)).to.equal(true);
 
@@ -245,7 +331,7 @@ describe("SmartCertificateVerification", function () {
   describe("verification of unknown certificates", function () {
     it("reports NonExistent for an id that was never issued", async function () {
       const { contract } = await loadFixture(deployFixture);
-      const fakeId = ethers.keccak256(ethers.toUtf8Bytes("does-not-exist"));
+      const fakeId = fileHash("does-not-exist");
 
       const [valid, status] = await contract.verifyCertificate(fakeId);
       expect(valid).to.equal(false);
@@ -277,9 +363,10 @@ describe("SmartCertificateVerification", function () {
     it("blocks anyone but the pending owner from accepting", async function () {
       const { contract, issuer2, stranger } = await loadFixture(deployFixture);
       await contract.transferOwnership(issuer2.address);
-      await expect(
-        contract.connect(stranger).acceptOwnership()
-      ).to.be.revertedWithCustomError(contract, "NotPendingOwner");
+      await expect(contract.connect(stranger).acceptOwnership()).to.be.revertedWithCustomError(
+        contract,
+        "NotPendingOwner"
+      );
     });
   });
 });

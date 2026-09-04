@@ -42,10 +42,13 @@ module.exports = {
       chainId: 11155111,
     },
   },
+  // A single Etherscan.io key uses the v2 API; the per-network object form
+  // routes to the retired v1 endpoint and fails.
   etherscan: {
-    apiKey: {
-      sepolia: ETHERSCAN_API_KEY || "",
-    },
+    apiKey: ETHERSCAN_API_KEY || "",
+  },
+  sourcify: {
+    enabled: false,
   },
   gasReporter: {
     enabled: REPORT_GAS === "true",

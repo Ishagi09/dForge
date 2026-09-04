@@ -3,8 +3,10 @@ pragma solidity ^0.8.24;
 
 /// @title Smart Certificate Verification
 /// @notice Issue, revoke and verify tamper-proof certificates on-chain.
-/// @dev Certificate ids are derived from a monotonically increasing nonce, so identical
-///      certificates issued in the same block still receive distinct ids.
+/// @dev Every certificate is bound to the SHA-256 hash of its source document, so a
+///      verifier holding the file can look the record up directly. Certificate ids are
+///      derived from a monotonically increasing nonce, so identical certificates issued
+///      in the same block still receive distinct ids.
 contract SmartCertificateVerification {
     /// @notice Why a certificate is, or is not, currently valid.
     enum Status {
@@ -14,7 +16,7 @@ contract SmartCertificateVerification {
         Expired
     }
 
-    /// @dev Field order is deliberate: it packs into two storage slots.
+    /// @dev Field order is deliberate: the address/uint64/bool group packs tightly.
     ///      slot 0: issuer(20) + issuedAt(8) + revoked(1) = 29 bytes
     ///      slot 1: recipient(20) + expiresAt(8)          = 28 bytes
     struct Certificate {
@@ -23,9 +25,10 @@ contract SmartCertificateVerification {
         bool revoked;
         address recipient;
         uint64 expiresAt; // 0 == never expires
+        bytes32 fileHash; // SHA-256 of the certificate document
         string recipientName;
         string courseName;
-        string metadataURI; // e.g. an IPFS CID for the certificate document
+        string metadataURI; // e.g. an IPFS CID for the document itself
     }
 
     address public owner;
@@ -35,6 +38,7 @@ contract SmartCertificateVerification {
     uint256 public totalCertificates;
 
     mapping(bytes32 => Certificate) private _certificates;
+    mapping(bytes32 => bytes32) private _idByFileHash;
     mapping(address => bool) public issuers;
     mapping(address => bytes32[]) private _certificatesOf;
 
@@ -48,6 +52,8 @@ contract SmartCertificateVerification {
     error EmptyField();
     error InvalidExpiry();
     error LengthMismatch();
+    error InvalidFileHash();
+    error FileHashAlreadyRegistered();
 
     event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
@@ -55,8 +61,9 @@ contract SmartCertificateVerification {
     event IssuerRevoked(address indexed issuer);
     event CertificateIssued(
         bytes32 indexed certificateId,
+        bytes32 indexed fileHash,
         address indexed issuer,
-        address indexed recipient,
+        address recipient,
         string recipientName,
         string courseName,
         uint64 expiresAt
@@ -122,35 +129,39 @@ contract SmartCertificateVerification {
     // Issuance
     // --------------------------------------------------------------------
 
-    /// @notice Issue a certificate.
+    /// @notice Issue a certificate bound to a document's SHA-256 hash.
+    /// @param fileHash SHA-256 of the certificate document. Must be non-zero and unused.
     /// @param recipient Wallet of the holder, or address(0) if not bound to a wallet.
     /// @param expiresAt Unix expiry timestamp, or 0 for a certificate that never expires.
-    /// @return certificateId The unique id used to verify this certificate.
+    /// @return certificateId The unique id of the new certificate.
     function issueCertificate(
+        bytes32 fileHash,
         address recipient,
         string calldata recipientName,
         string calldata courseName,
         string calldata metadataURI,
         uint64 expiresAt
     ) external onlyIssuer returns (bytes32 certificateId) {
-        return _issue(recipient, recipientName, courseName, metadataURI, expiresAt);
+        return _issue(fileHash, recipient, recipientName, courseName, metadataURI, expiresAt);
     }
 
-    /// @notice Issue the same course certificate to many recipients in one transaction.
-    /// @dev `recipients` and `recipientNames` must be the same length.
+    /// @notice Issue the same course to many recipients, each with their own document.
+    /// @dev `fileHashes`, `recipients` and `recipientNames` must all be the same length.
     function issueBatch(
+        bytes32[] calldata fileHashes,
         address[] calldata recipients,
         string[] calldata recipientNames,
         string calldata courseName,
         string calldata metadataURI,
         uint64 expiresAt
     ) external onlyIssuer returns (bytes32[] memory certificateIds) {
-        uint256 count = recipients.length;
-        if (count != recipientNames.length) revert LengthMismatch();
+        uint256 count = fileHashes.length;
+        if (count != recipients.length || count != recipientNames.length) revert LengthMismatch();
 
         certificateIds = new bytes32[](count);
         for (uint256 i = 0; i < count; i++) {
             certificateIds[i] = _issue(
+                fileHashes[i],
                 recipients[i],
                 recipientNames[i],
                 courseName,
@@ -161,12 +172,15 @@ contract SmartCertificateVerification {
     }
 
     function _issue(
+        bytes32 fileHash,
         address recipient,
         string calldata recipientName,
         string calldata courseName,
         string calldata metadataURI,
         uint64 expiresAt
     ) private returns (bytes32 certificateId) {
+        if (fileHash == bytes32(0)) revert InvalidFileHash();
+        if (_idByFileHash[fileHash] != bytes32(0)) revert FileHashAlreadyRegistered();
         if (bytes(recipientName).length == 0 || bytes(courseName).length == 0) revert EmptyField();
         if (expiresAt != 0 && expiresAt <= block.timestamp) revert InvalidExpiry();
 
@@ -174,7 +188,7 @@ contract SmartCertificateVerification {
         // dynamic fields, and no collision between identical certs in the same block.
         uint256 nonce = totalCertificates;
         certificateId = keccak256(
-            abi.encode(nonce, address(this), block.chainid, msg.sender, recipient, recipientName, courseName)
+            abi.encode(nonce, address(this), block.chainid, msg.sender, recipient, fileHash)
         );
 
         _certificates[certificateId] = Certificate({
@@ -183,10 +197,13 @@ contract SmartCertificateVerification {
             revoked: false,
             recipient: recipient,
             expiresAt: expiresAt,
+            fileHash: fileHash,
             recipientName: recipientName,
             courseName: courseName,
             metadataURI: metadataURI
         });
+
+        _idByFileHash[fileHash] = certificateId;
 
         unchecked {
             totalCertificates = nonce + 1;
@@ -199,6 +216,7 @@ contract SmartCertificateVerification {
 
         emit CertificateIssued(
             certificateId,
+            fileHash,
             msg.sender,
             recipient,
             recipientName,
@@ -223,12 +241,25 @@ contract SmartCertificateVerification {
         emit CertificateRevoked(certificateId, msg.sender);
     }
 
+    /// @notice Revoke by document hash, for when you have the file but not the id.
+    function revokeByFileHash(bytes32 fileHash) external {
+        bytes32 certificateId = _idByFileHash[fileHash];
+        if (certificateId == bytes32(0)) revert CertificateNotFound();
+
+        Certificate storage cert = _certificates[certificateId];
+        if (msg.sender != cert.issuer && msg.sender != owner) revert NotAuthorized();
+        if (cert.revoked) revert AlreadyRevoked();
+
+        cert.revoked = true;
+        emit CertificateRevoked(certificateId, msg.sender);
+    }
+
     // --------------------------------------------------------------------
     // Verification / views
     // --------------------------------------------------------------------
 
-    /// @notice Verify a certificate and return its details in one call.
-    /// @return valid True only when the certificate exists, is not revoked and has not expired.
+    /// @notice Verify a certificate by its id.
+    /// @return valid True only when it exists, is not revoked and has not expired.
     /// @return status Why the certificate is or is not valid.
     /// @return cert The stored certificate data (zeroed if it does not exist).
     function verifyCertificate(
@@ -237,6 +268,29 @@ contract SmartCertificateVerification {
         cert = _certificates[certificateId];
         status = _statusOf(cert);
         valid = status == Status.Valid;
+    }
+
+    /// @notice Verify a document directly by its SHA-256 hash. One call, no id needed.
+    /// @return valid True only when it exists, is not revoked and has not expired.
+    /// @return status Why the certificate is or is not valid.
+    /// @return certificateId The matching certificate id, or zero if unknown.
+    /// @return cert The stored certificate data (zeroed if it does not exist).
+    function verifyByFileHash(
+        bytes32 fileHash
+    )
+        external
+        view
+        returns (bool valid, Status status, bytes32 certificateId, Certificate memory cert)
+    {
+        certificateId = _idByFileHash[fileHash];
+        cert = _certificates[certificateId];
+        status = _statusOf(cert);
+        valid = status == Status.Valid;
+    }
+
+    /// @notice The certificate id registered for a document hash, or zero.
+    function certificateIdByFileHash(bytes32 fileHash) external view returns (bytes32) {
+        return _idByFileHash[fileHash];
     }
 
     /// @notice Current status of a certificate.
