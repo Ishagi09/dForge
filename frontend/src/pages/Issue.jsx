@@ -1,7 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ZeroAddress } from "ethers";
 import { formatBytes, sha256File } from "../lib/hash";
-import { connectWallet, describeError, EXPLORER, shortHash } from "../lib/contract";
+import {
+  connectWallet,
+  describeError,
+  discoverWallets,
+  EXPLORER,
+  shortHash,
+} from "../lib/contract";
 
 const EMPTY_FORM = {
   recipientName: "",
@@ -11,6 +17,8 @@ const EMPTY_FORM = {
 };
 
 export default function Issue() {
+  const [wallets, setWallets] = useState([]);
+  const [wallet, setWallet] = useState(null);
   const [account, setAccount] = useState("");
   const [file, setFile] = useState(null);
   const [fileHash, setFileHash] = useState("");
@@ -19,6 +27,18 @@ export default function Issue() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    discoverWallets().then((found) => {
+      if (cancelled) return;
+      setWallets(found);
+      if (found.length === 1) setWallet(found[0]);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function update(field) {
     return (event) => setForm((prev) => ({ ...prev, [field]: event.target.value }));
@@ -42,11 +62,26 @@ export default function Issue() {
     }
   }
 
-  async function onConnect() {
+  /** Connects the chosen wallet and returns a signer-backed contract. */
+  async function connect(chosen) {
+    const target = chosen ?? wallet;
+    if (!target) {
+      throw new Error(
+        wallets.length === 0
+          ? "No wallet found. Install MetaMask to issue certificates."
+          : "Choose which wallet to connect."
+      );
+    }
+    const { address, contract } = await connectWallet(target.provider);
+    setWallet(target);
+    setAccount(address);
+    return contract;
+  }
+
+  async function onConnect(chosen) {
     setError("");
     try {
-      const { address } = await connectWallet();
-      setAccount(address);
+      await connect(chosen);
     } catch (err) {
       setError(describeError(err));
     }
@@ -64,8 +99,7 @@ export default function Issue() {
 
     setSubmitting(true);
     try {
-      const { address, contract } = await connectWallet();
-      setAccount(address);
+      const contract = await connect();
 
       const expiresAt = form.expiresAt
         ? Math.floor(new Date(form.expiresAt).getTime() / 1000)
@@ -110,13 +144,54 @@ export default function Issue() {
               Only wallets authorized as issuers on the contract can do this.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onConnect}
-            className="shrink-0 rounded border border-slate-300 px-3 py-1.5 text-sm font-medium hover:bg-slate-50"
-          >
-            {account ? shortHash(account, 6, 4) : "Connect wallet"}
-          </button>
+          {account && (
+            <span className="shrink-0 rounded border border-green-300 bg-green-50 px-3 py-1.5 font-mono text-xs text-green-800">
+              {shortHash(account, 6, 4)}
+            </span>
+          )}
+        </div>
+
+        <div className="mt-4 rounded border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs font-medium text-slate-600">
+            {wallets.length === 0
+              ? "No wallet detected"
+              : account
+                ? `Connected with ${wallet?.info?.name ?? "wallet"}`
+                : "Choose a wallet to connect"}
+          </p>
+
+          {wallets.length === 0 ? (
+            <p className="mt-2 text-xs text-slate-500">
+              Install MetaMask, then reload this page.
+            </p>
+          ) : (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {wallets.map((entry) => (
+                <button
+                  key={entry.info.uuid}
+                  type="button"
+                  onClick={() => onConnect(entry)}
+                  className={`flex items-center gap-2 rounded border px-3 py-1.5 text-sm font-medium ${
+                    wallet?.info?.uuid === entry.info.uuid
+                      ? "border-slate-900 bg-white"
+                      : "border-slate-300 bg-white hover:bg-slate-100"
+                  }`}
+                >
+                  {entry.info.icon && (
+                    <img src={entry.info.icon} alt="" className="h-4 w-4" />
+                  )}
+                  {entry.info.name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {wallets.length > 1 && !account && (
+            <p className="mt-2 text-xs text-slate-500">
+              More than one wallet extension is installed. Pick the one holding your issuer
+              account.
+            </p>
+          )}
         </div>
 
         <form onSubmit={onSubmit} className="mt-5 space-y-4">

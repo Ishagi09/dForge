@@ -20,16 +20,53 @@ export function getReadContract() {
   return new Contract(CONTRACT_ADDRESS, abi, provider);
 }
 
-async function switchToSepolia(ethereum) {
+/**
+ * Enumerate injected wallets via EIP-6963.
+ *
+ * `window.ethereum` is a single global that every wallet extension races to claim, so with
+ * more than one installed it is whichever won - not necessarily the one the user wants.
+ * EIP-6963 has each wallet announce itself separately, which is the only reliable way to
+ * offer a real choice. Wallets answer synchronously, so a short collection window is enough.
+ */
+export function discoverWallets(timeoutMs = 350) {
+  return new Promise((resolve) => {
+    if (typeof window === "undefined") return resolve([]);
+
+    const found = new Map();
+    const onAnnounce = (event) => {
+      const { info, provider } = event.detail ?? {};
+      if (info?.uuid && provider) found.set(info.uuid, { info, provider });
+    };
+
+    window.addEventListener("eip6963:announceProvider", onAnnounce);
+    window.dispatchEvent(new Event("eip6963:requestProvider"));
+
+    setTimeout(() => {
+      window.removeEventListener("eip6963:announceProvider", onAnnounce);
+
+      const wallets = [...found.values()];
+      // Fall back to the legacy global only if nothing announced itself.
+      if (wallets.length === 0 && window.ethereum) {
+        wallets.push({
+          info: { uuid: "legacy", name: "Injected wallet", rdns: "legacy" },
+          provider: window.ethereum,
+        });
+      }
+      resolve(wallets);
+    }, timeoutMs);
+  });
+}
+
+async function switchToSepolia(injected) {
   try {
-    await ethereum.request({
+    await injected.request({
       method: "wallet_switchEthereumChain",
       params: [{ chainId: SEPOLIA_CHAIN_ID_HEX }],
     });
   } catch (err) {
     // 4902 = chain not present in the wallet yet.
     if (err?.code === 4902) {
-      await ethereum.request({
+      await injected.request({
         method: "wallet_addEthereumChain",
         params: [
           {
@@ -47,20 +84,23 @@ async function switchToSepolia(ethereum) {
   }
 }
 
-/** Prompts for wallet access, ensures Sepolia, and returns a signer-backed contract. */
-export async function connectWallet() {
-  const { ethereum } = window;
-  if (!ethereum) {
+/**
+ * Connect to a specific injected provider, ensure Sepolia, and return a signer-backed contract.
+ * @param injected an EIP-1193 provider from `discoverWallets`.
+ */
+export async function connectWallet(injected) {
+  const target = injected ?? window.ethereum;
+  if (!target) {
     throw new Error("No wallet found. Install MetaMask to issue certificates.");
   }
 
-  await ethereum.request({ method: "eth_requestAccounts" });
+  await target.request({ method: "eth_requestAccounts" });
 
-  let provider = new BrowserProvider(ethereum);
+  let provider = new BrowserProvider(target);
   const network = await provider.getNetwork();
   if (network.chainId !== BigInt(SEPOLIA_CHAIN_ID)) {
-    await switchToSepolia(ethereum);
-    provider = new BrowserProvider(ethereum); // rebuild after the chain change
+    await switchToSepolia(target);
+    provider = new BrowserProvider(target); // rebuild after the chain change
   }
 
   const signer = await provider.getSigner();
@@ -86,9 +126,17 @@ export function describeError(err) {
 
   const name = err?.revert?.name;
   if (name && messages[name]) return messages[name];
-  if (err?.code === "ACTION_REJECTED") return "Transaction rejected in the wallet.";
+  if (err?.code === "ACTION_REJECTED" || err?.code === 4001) {
+    return "Request rejected in the wallet.";
+  }
   if (err?.code === "INSUFFICIENT_FUNDS") return "Not enough Sepolia ETH to cover gas.";
-  return err?.shortMessage || err?.message || String(err);
+
+  const raw = err?.shortMessage || err?.message || String(err);
+  // Wallet extensions fighting over window.ethereum surface as opaque "Unexpected error".
+  if (/unexpected error/i.test(raw)) {
+    return `${raw} - this usually means another wallet extension intercepted the request. Pick a specific wallet above and try again.`;
+  }
+  return raw;
 }
 
 export function shortHash(value, lead = 10, tail = 8) {
