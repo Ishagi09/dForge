@@ -1,1 +1,68 @@
 @import "tailwindcss";
+
+@theme {
+  --color-cream: #f5f1ea;
+  --color-ink: #1a1815;
+  --color-accent: #d2560b;
+
+  --font-display: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+}
+
+html {
+  background-color: var(--color-cream);
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Display serif is set large and tight - the optical sizing needs help at that scale. */
+.display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 0.95;
+}
+
+/* Small-caps micro label used above every section. */
+.micro {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.24em;
+}
+
+body.cursor-hidden,
+body.cursor-hidden * {
+  cursor: none;
+}
+
+/* Text entry keeps its caret affordance - losing the I-beam there costs more than
+   the custom cursor gains. */
+body.cursor-hidden input[type="text"],
+body.cursor-hidden input[type="datetime-local"],
+body.cursor-hidden textarea {
+  cursor: text;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--color-accent) 25%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

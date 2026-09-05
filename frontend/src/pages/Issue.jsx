@@ -1,13 +1,12 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { ZeroAddress } from "ethers";
-import { formatBytes, sha256File } from "../lib/hash";
-import {
-  connectWallet,
-  describeError,
-  discoverWallets,
-  EXPLORER,
-  shortHash,
-} from "../lib/contract";
+import DrawRule from "../components/DrawRule";
+import FileHashInput from "../components/FileHashInput";
+import WalletPicker from "../components/WalletPicker";
+import { sha256File } from "../lib/hash";
+import { useWallet } from "../lib/useWallet";
+import { describeError, EXPLORER, shortHash } from "../lib/contract";
 
 const EMPTY_FORM = {
   recipientName: "",
@@ -16,10 +15,11 @@ const EMPTY_FORM = {
   expiresAt: "",
 };
 
+const inputClass =
+  "w-full border-0 border-b border-ink/15 bg-transparent px-0 py-2.5 text-[15px] outline-none transition-colors placeholder:text-ink/25 focus:border-accent";
+
 export default function Issue() {
-  const [wallets, setWallets] = useState([]);
-  const [wallet, setWallet] = useState(null);
-  const [account, setAccount] = useState("");
+  const { wallets, wallet, account, connect } = useWallet();
   const [file, setFile] = useState(null);
   const [fileHash, setFileHash] = useState("");
   const [hashing, setHashing] = useState(false);
@@ -28,24 +28,11 @@ export default function Issue() {
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    discoverWallets().then((found) => {
-      if (cancelled) return;
-      setWallets(found);
-      if (found.length === 1) setWallet(found[0]);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   function update(field) {
     return (event) => setForm((prev) => ({ ...prev, [field]: event.target.value }));
   }
 
-  async function onFile(event) {
-    const selected = event.target.files?.[0];
+  async function onFile(selected) {
     setError("");
     setResult(null);
     setFileHash("");
@@ -62,26 +49,10 @@ export default function Issue() {
     }
   }
 
-  /** Connects the chosen wallet and returns a signer-backed contract. */
-  async function connect(chosen) {
-    const target = chosen ?? wallet;
-    if (!target) {
-      throw new Error(
-        wallets.length === 0
-          ? "No wallet found. Install MetaMask to issue certificates."
-          : "Choose which wallet to connect."
-      );
-    }
-    const { address, contract } = await connectWallet(target.provider);
-    setWallet(target);
-    setAccount(address);
-    return contract;
-  }
-
-  async function onConnect(chosen) {
+  async function onSelectWallet(entry) {
     setError("");
     try {
-      await connect(chosen);
+      await connect(entry);
     } catch (err) {
       setError(describeError(err));
     }
@@ -115,7 +86,7 @@ export default function Issue() {
       );
 
       const receipt = await tx.wait();
-      const event = receipt.logs
+      const issued = receipt.logs
         .map((log) => {
           try {
             return contract.interface.parseLog(log);
@@ -125,7 +96,7 @@ export default function Issue() {
         })
         .find((parsed) => parsed?.name === "CertificateIssued");
 
-      setResult({ txHash: tx.hash, certificateId: event?.args?.certificateId ?? "" });
+      setResult({ txHash: tx.hash, certificateId: issued?.args?.certificateId ?? "" });
       setForm(EMPTY_FORM);
     } catch (err) {
       setError(describeError(err));
@@ -134,183 +105,164 @@ export default function Issue() {
     }
   }
 
+  const disabled = submitting || hashing || !fileHash;
+
   return (
-    <div className="space-y-6">
-      <section className="rounded-lg border border-slate-200 bg-white p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-base font-semibold">Issue a certificate</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Only wallets authorized as issuers on the contract can do this.
-            </p>
-          </div>
+    <div className="space-y-20">
+      <section>
+        <p className="micro text-ink/40">Issuance</p>
+        <h2 className="display mt-4 text-4xl">Issue a certificate</h2>
+        <p className="mt-6 max-w-md text-[15px] leading-[1.75] text-ink/60">
+          Only wallets authorized as issuers on the contract can do this.
+        </p>
+
+        <div className="mt-12 border-t border-ink/10 pt-8">
+          <WalletPicker
+            wallets={wallets}
+            wallet={wallet}
+            account={account}
+            onSelect={onSelectWallet}
+          />
           {account && (
-            <span className="shrink-0 rounded border border-green-300 bg-green-50 px-3 py-1.5 font-mono text-xs text-green-800">
+            <p className="mt-4 font-mono text-[11px] tracking-[0.08em] text-ink/55">
               {shortHash(account, 6, 4)}
-            </span>
-          )}
-        </div>
-
-        <div className="mt-4 rounded border border-slate-200 bg-slate-50 p-3">
-          <p className="text-xs font-medium text-slate-600">
-            {wallets.length === 0
-              ? "No wallet detected"
-              : account
-                ? `Connected with ${wallet?.info?.name ?? "wallet"}`
-                : "Choose a wallet to connect"}
-          </p>
-
-          {wallets.length === 0 ? (
-            <p className="mt-2 text-xs text-slate-500">
-              Install MetaMask, then reload this page.
-            </p>
-          ) : (
-            <div className="mt-2 flex flex-wrap gap-2">
-              {wallets.map((entry) => (
-                <button
-                  key={entry.info.uuid}
-                  type="button"
-                  onClick={() => onConnect(entry)}
-                  className={`flex items-center gap-2 rounded border px-3 py-1.5 text-sm font-medium ${
-                    wallet?.info?.uuid === entry.info.uuid
-                      ? "border-slate-900 bg-white"
-                      : "border-slate-300 bg-white hover:bg-slate-100"
-                  }`}
-                >
-                  {entry.info.icon && (
-                    <img src={entry.info.icon} alt="" className="h-4 w-4" />
-                  )}
-                  {entry.info.name}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {wallets.length > 1 && !account && (
-            <p className="mt-2 text-xs text-slate-500">
-              More than one wallet extension is installed. Pick the one holding your issuer
-              account.
             </p>
           )}
         </div>
 
-        <form onSubmit={onSubmit} className="mt-5 space-y-4">
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium">Certificate file</span>
-            <input
-              type="file"
-              onChange={onFile}
-              className="block w-full cursor-pointer rounded border border-slate-300 p-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-sm file:text-white"
-            />
-          </label>
+        <form onSubmit={onSubmit} className="mt-12 space-y-10">
+          <FileHashInput file={file} fileHash={fileHash} busy={hashing} onFile={onFile} />
 
-          {file && (
-            <p className="text-xs text-slate-500">
-              {file.name} · {formatBytes(file.size)}
-              {hashing && " · hashing…"}
-            </p>
-          )}
-
-          {fileHash && (
-            <div>
-              <span className="text-xs font-medium text-slate-500">SHA-256</span>
-              <p className="mt-1 break-all rounded bg-slate-50 p-2 font-mono text-xs">{fileHash}</p>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2">
             <label className="block">
-              <span className="mb-1 block text-sm font-medium">Recipient name</span>
+              <span className="micro mb-2 block text-ink/40">Recipient name</span>
               <input
                 required
                 value={form.recipientName}
                 onChange={update("recipientName")}
                 placeholder="Jane Doe"
-                className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                className={inputClass}
               />
             </label>
 
             <label className="block">
-              <span className="mb-1 block text-sm font-medium">Course name</span>
+              <span className="micro mb-2 block text-ink/40">Course name</span>
               <input
                 required
                 value={form.courseName}
                 onChange={update("courseName")}
                 placeholder="Blockchain Fundamentals"
-                className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                className={inputClass}
               />
             </label>
 
             <label className="block">
-              <span className="mb-1 block text-sm font-medium">
-                Recipient wallet <span className="font-normal text-slate-400">(optional)</span>
-              </span>
+              <span className="micro mb-2 block text-ink/40">Recipient wallet — optional</span>
               <input
                 value={form.recipientAddress}
                 onChange={update("recipientAddress")}
                 placeholder="0x…"
-                className="w-full rounded border border-slate-300 px-3 py-2 font-mono text-xs"
+                className={`${inputClass} font-mono text-[13px] tracking-[0.06em]`}
               />
             </label>
 
             <label className="block">
-              <span className="mb-1 block text-sm font-medium">
-                Expires <span className="font-normal text-slate-400">(optional)</span>
-              </span>
+              <span className="micro mb-2 block text-ink/40">Expires — optional</span>
               <input
                 type="datetime-local"
                 value={form.expiresAt}
                 onChange={update("expiresAt")}
-                className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                className={inputClass}
               />
             </label>
           </div>
 
           <button
             type="submit"
-            disabled={submitting || hashing || !fileHash}
-            className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+            disabled={disabled}
+            className={`group relative overflow-hidden px-7 py-3 ${
+              disabled
+                ? "cursor-not-allowed bg-ink/10 text-ink/35"
+                : "bg-accent text-cream"
+            }`}
           >
-            {submitting ? "Issuing…" : "Issue certificate"}
+            {!disabled && (
+              <span className="absolute inset-0 origin-left scale-x-0 bg-ink transition-transform duration-300 ease-out group-hover:scale-x-100" />
+            )}
+            <span className="micro relative">
+              {submitting ? "Issuing…" : "Issue certificate"}
+            </span>
           </button>
         </form>
 
         {error && (
-          <p className="mt-4 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+          <p className="mt-8 border-l-2 border-[#A32118] py-1 pl-4 text-[14px] leading-relaxed text-[#A32118]">
             {error}
           </p>
         )}
       </section>
 
-      {result && (
-        <section className="rounded-lg border border-green-300 bg-green-50 p-6">
-          <h2 className="text-base font-semibold text-green-900">Certificate issued</h2>
-          <p className="mt-1 text-sm text-green-800">
-            The document is now certified on-chain. Anyone can verify it by uploading the same file
-            on the Verify page.
-          </p>
+      <AnimatePresence>
+        {result && (
+          <motion.section
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <DrawRule />
 
-          <div className="mt-4 space-y-3 text-sm">
-            <div>
-              <span className="text-xs font-medium text-green-900/70">Certificate ID</span>
-              <p className="mt-0.5 break-all font-mono text-xs">{result.certificateId}</p>
-            </div>
-            <div>
-              <span className="text-xs font-medium text-green-900/70">Transaction</span>
-              <p className="mt-0.5">
-                <a
-                  className="break-all font-mono text-xs underline"
-                  href={`${EXPLORER}/tx/${result.txHash}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {result.txHash}
-                </a>
-              </p>
-            </div>
-          </div>
-        </section>
-      )}
+            <p className="micro mt-10 text-ink/40">Result</p>
+
+            <motion.h2
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ type: "spring", stiffness: 190, damping: 15, delay: 0.12 }}
+              className="display mt-5 origin-left text-6xl"
+              style={{ color: "#1F6B4A" }}
+            >
+              Issued
+            </motion.h2>
+
+            <motion.p
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.55, delay: 0.34, ease: [0.16, 1, 0.3, 1] }}
+              className="mt-8 max-w-md text-[15px] leading-[1.75] text-ink/60"
+            >
+              The document is certified on-chain. Anyone can verify it by uploading the same file
+              on the Verify page.
+            </motion.p>
+
+            <motion.dl
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.55, delay: 0.45, ease: [0.16, 1, 0.3, 1] }}
+              className="mt-12 space-y-8 border-t border-ink/10 pt-10"
+            >
+              <div>
+                <dt className="micro text-ink/40">Certificate ID</dt>
+                <dd className="mt-2 break-all font-mono text-[11px] tracking-[0.08em] text-ink/70">
+                  {result.certificateId}
+                </dd>
+              </div>
+              <div>
+                <dt className="micro text-ink/40">Transaction</dt>
+                <dd className="mt-2">
+                  <a
+                    className="break-all font-mono text-[11px] tracking-[0.08em] text-ink/70 underline decoration-ink/20 underline-offset-4 transition-colors hover:text-ink"
+                    href={`${EXPLORER}/tx/${result.txHash}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {result.txHash}
+                  </a>
+                </dd>
+              </div>
+            </motion.dl>
+          </motion.section>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

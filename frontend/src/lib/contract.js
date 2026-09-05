@@ -14,10 +14,17 @@ export const EXPLORER = "https://sepolia.etherscan.io";
 /** Status enum, index-aligned with the contract's `Status`. */
 export const STATUS_LABELS = ["Not Found", "Valid", "Revoked", "Expired"];
 
+let readProvider;
+
+/** Shared read-only provider, reused so the block poller and reads share one connection. */
+export function getReadProvider() {
+  if (!readProvider) readProvider = new JsonRpcProvider(READ_RPC, SEPOLIA_CHAIN_ID);
+  return readProvider;
+}
+
 /** Read-only contract instance. No wallet required. */
 export function getReadContract() {
-  const provider = new JsonRpcProvider(READ_RPC, SEPOLIA_CHAIN_ID);
-  return new Contract(CONTRACT_ADDRESS, abi, provider);
+  return new Contract(CONTRACT_ADDRESS, abi, getReadProvider());
 }
 
 /**

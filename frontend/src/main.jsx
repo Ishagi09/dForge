@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import "./index.css";
 import App from "./App.jsx";
 import Issue from "./pages/Issue.jsx";
+import Revoke from "./pages/Revoke.jsx";
 import Verify from "./pages/Verify.jsx";
 
 createRoot(document.getElementById("root")).render(
@@ -14,6 +15,7 @@ createRoot(document.getElementById("root")).render(
           <Route index element={<Navigate to="/verify" replace />} />
           <Route path="issue" element={<Issue />} />
           <Route path="verify" element={<Verify />} />
+          <Route path="revoke" element={<Revoke />} />
           <Route path="*" element={<Navigate to="/verify" replace />} />
         </Route>
       </Routes>

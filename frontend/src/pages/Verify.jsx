@@ -1,25 +1,21 @@
 import { useState } from "react";
-import { formatBytes, sha256File } from "../lib/hash";
-import { describeError, EXPLORER, getReadContract, STATUS_LABELS } from "../lib/contract";
+import { AnimatePresence, motion } from "framer-motion";
+import CertificateCard from "../components/CertificateCard";
+import FileHashInput from "../components/FileHashInput";
+import Verdict from "../components/Verdict";
+import { sha256File } from "../lib/hash";
+import { describeError, getReadContract } from "../lib/contract";
+import { formatTimestamp, ZERO_ADDRESS } from "../lib/status";
 
-const STATUS_STYLES = {
-  0: "bg-slate-100 text-slate-700 border-slate-300",
-  1: "bg-green-50 text-green-800 border-green-300",
-  2: "bg-red-50 text-red-800 border-red-300",
-  3: "bg-amber-50 text-amber-900 border-amber-300",
+const list = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.07, delayChildren: 0.2 } },
 };
 
-const STATUS_NOTES = {
-  0: "This document has no certificate on-chain. It was never issued, or the file has been altered.",
-  1: "This document matches a certificate that is active and has not expired.",
-  2: "A certificate exists for this document, but the issuer revoked it.",
-  3: "A certificate exists for this document, but it has passed its expiry date.",
+const item = {
+  hidden: { opacity: 0, y: 10 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } },
 };
-
-function formatTimestamp(seconds) {
-  const n = Number(seconds);
-  return n === 0 ? "Never" : new Date(n * 1000).toLocaleString();
-}
 
 export default function Verify() {
   const [file, setFile] = useState(null);
@@ -28,8 +24,7 @@ export default function Verify() {
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
 
-  async function onFile(event) {
-    const selected = event.target.files?.[0];
+  async function onFile(selected) {
     setError("");
     setResult(null);
     setFileHash("");
@@ -52,92 +47,96 @@ export default function Verify() {
   }
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-lg border border-slate-200 bg-white p-6">
-        <h2 className="text-base font-semibold">Verify a certificate</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Upload the certificate file. It is hashed locally in your browser and checked against the
-          contract — the file itself is never uploaded anywhere.
+    <div className="space-y-20">
+      <section>
+        <p className="micro text-ink/40">Verification</p>
+        <h2 className="display mt-4 text-4xl">Verify a certificate</h2>
+        <p className="mt-6 max-w-md text-[15px] leading-[1.75] text-ink/60">
+          The file is hashed in your browser and matched against the contract. It is never
+          uploaded anywhere.
         </p>
 
-        <label className="mt-4 block">
-          <span className="mb-1 block text-sm font-medium">Certificate file</span>
-          <input
-            type="file"
-            onChange={onFile}
-            className="block w-full cursor-pointer rounded border border-slate-300 p-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-sm file:text-white"
-          />
-        </label>
+        <div className="mt-10">
+          <FileHashInput file={file} fileHash={fileHash} busy={busy} onFile={onFile} />
+        </div>
 
-        {file && (
-          <p className="mt-2 text-xs text-slate-500">
-            {file.name} · {formatBytes(file.size)}
-          </p>
-        )}
-
-        {fileHash && (
-          <div className="mt-3">
-            <span className="text-xs font-medium text-slate-500">SHA-256</span>
-            <p className="mt-1 break-all rounded bg-slate-50 p-2 font-mono text-xs">{fileHash}</p>
-          </div>
-        )}
-
-        {busy && <p className="mt-4 text-sm text-slate-600">Hashing and checking on-chain…</p>}
+        {busy && <p className="mt-6 text-[13px] text-ink/45">Checking on-chain…</p>}
 
         {error && (
-          <p className="mt-4 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+          <p className="mt-6 border-l-2 border-[#A32118] py-1 pl-4 text-[14px] leading-relaxed text-[#A32118]">
             {error}
           </p>
         )}
       </section>
 
-      {result && !busy && (
-        <section className={`rounded-lg border p-6 ${STATUS_STYLES[result.status]}`}>
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">{STATUS_LABELS[result.status]}</h2>
-            <span className="rounded border border-current px-2 py-0.5 text-xs font-medium">
-              {result.valid ? "VALID" : "NOT VALID"}
-            </span>
-          </div>
-          <p className="mt-2 text-sm">{STATUS_NOTES[result.status]}</p>
+      <AnimatePresence mode="wait">
+        {result && !busy && (
+          <motion.div
+            key={`${result.certificateId}-${result.status}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.3 }}
+            className="space-y-14"
+          >
+            <Verdict status={result.status} />
 
-          {result.status !== 0 && (
-            <dl className="mt-5 grid grid-cols-1 gap-3 border-t border-current/20 pt-4 text-sm sm:grid-cols-2">
-              <Field label="Recipient" value={result.cert.recipientName} />
-              <Field label="Course" value={result.cert.courseName} />
-              <Field label="Issued" value={formatTimestamp(result.cert.issuedAt)} />
-              <Field label="Expires" value={formatTimestamp(result.cert.expiresAt)} />
-              <Field label="Issuer" value={result.cert.issuer} mono />
-              {result.cert.recipient !== "0x0000000000000000000000000000000000000000" && (
-                <Field label="Recipient wallet" value={result.cert.recipient} mono />
-              )}
-              <div className="sm:col-span-2">
-                <dt className="text-xs font-medium opacity-70">Certificate ID</dt>
-                <dd className="mt-0.5 break-all font-mono text-xs">{result.certificateId}</dd>
-              </div>
-              <div className="sm:col-span-2">
-                <a
-                  className="text-xs underline"
-                  href={`${EXPLORER}/address/${result.cert.issuer}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  View issuer on Etherscan
-                </a>
-              </div>
-            </dl>
-          )}
-        </section>
-      )}
+            {result.status === 1 ? (
+              <CertificateCard cert={result.cert} certificateId={result.certificateId} />
+            ) : (
+              result.status !== 0 && <DetailList result={result} />
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-function Field({ label, value, mono = false }) {
+/** Revoked and Expired still have a real record worth reading, set quietly. */
+function DetailList({ result }) {
+  const { cert } = result;
+
   return (
-    <div>
-      <dt className="text-xs font-medium opacity-70">{label}</dt>
-      <dd className={`mt-0.5 break-all ${mono ? "font-mono text-xs" : ""}`}>{value}</dd>
-    </div>
+    <motion.dl
+      variants={list}
+      initial="hidden"
+      animate="visible"
+      className="grid grid-cols-1 gap-8 border-t border-ink/10 pt-10 sm:grid-cols-2"
+    >
+      <Entry label="Recipient">{cert.recipientName}</Entry>
+      <Entry label="Course">{cert.courseName}</Entry>
+      <Entry label="Issued">{formatTimestamp(cert.issuedAt)}</Entry>
+      <Entry label="Expires">{formatTimestamp(cert.expiresAt)}</Entry>
+      <Entry label="Issuer" mono>
+        {cert.issuer}
+      </Entry>
+      {cert.recipient !== ZERO_ADDRESS && (
+        <Entry label="Holder" mono>
+          {cert.recipient}
+        </Entry>
+      )}
+      <motion.div variants={item} className="sm:col-span-2">
+        <dt className="micro text-ink/40">Certificate ID</dt>
+        <dd className="mt-2 break-all font-mono text-[11px] tracking-[0.08em] text-ink/55">
+          {result.certificateId}
+        </dd>
+      </motion.div>
+    </motion.dl>
+  );
+}
+
+function Entry({ label, children, mono = false }) {
+  return (
+    <motion.div variants={item}>
+      <dt className="micro text-ink/40">{label}</dt>
+      <dd
+        className={`mt-2 break-all ${
+          mono ? "font-mono text-[11px] tracking-[0.08em] text-ink/70" : "text-[15px]"
+        }`}
+      >
+        {children}
+      </dd>
+    </motion.div>
   );
 }
