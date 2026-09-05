@@ -1,15 +1,7 @@
 import { useState } from "react";
 import { motion } from "motion/react";
 import { NavLink, Outlet } from "react-router-dom";
-import {
-  BarChart3,
-  Ban,
-  ChevronsLeft,
-  FilePlus2,
-  LayoutDashboard,
-  Settings,
-  ShieldCheck,
-} from "lucide-react";
+import { Ban, ChevronsLeft, FilePlus2, LayoutDashboard, ShieldCheck } from "lucide-react";
 import Cursor from "./components/Cursor";
 import GrainOverlay from "./components/GrainOverlay";
 import Wordmark from "./components/Wordmark";
@@ -23,13 +15,6 @@ const ROUTES = [
   { to: "/verify", label: "Verify", icon: ShieldCheck },
   { to: "/issue", label: "Issue", icon: FilePlus2 },
   { to: "/revoke", label: "Revoke", icon: Ban },
-];
-
-// Listed in the reference but with no route behind them yet. Shown disabled
-// rather than hidden or wired to a dead link.
-const PLANNED = [
-  { label: "Analytics", icon: BarChart3 },
-  { label: "Settings", icon: Settings },
 ];
 
 function NavItem({ to, label, icon: Icon, collapsed }) {
@@ -93,23 +78,6 @@ export default function App() {
             <NavItem key={route.to} {...route} collapsed={collapsed} />
           ))}
 
-          <div className="!mt-5 border-t border-white/[0.06] pt-4">
-            {PLANNED.map(({ label, icon: Icon }) => (
-              <div
-                key={label}
-                title="Not available yet"
-                className="flex cursor-not-allowed items-center gap-3 rounded-md px-3 py-2.5 text-[13.5px] text-muted/35"
-              >
-                <Icon size={17} strokeWidth={1.6} className="shrink-0" />
-                {!collapsed && (
-                  <span className="flex w-full items-center justify-between">
-                    {label}
-                    <span className="micro text-muted/25">Soon</span>
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
         </nav>
 
         <div className="px-3 pb-4">

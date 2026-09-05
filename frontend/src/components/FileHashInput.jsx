@@ -3,6 +3,10 @@ import { motion, useReducedMotion } from "motion/react";
 import HashReveal from "./HashReveal";
 import { formatBytes } from "../lib/hash";
 
+// Certificates are documents; this is generous for that and well under the
+// point where reading the file into memory threatens the tab.
+const MAX_FILE_BYTES = 100 * 1024 * 1024;
+
 /**
  * Drop zone that reports the chosen File and shows its computed SHA-256.
  * `onFile` receives a File, not an event, so drag-drop and browse share one path.
@@ -17,10 +21,23 @@ export default function FileHashInput({
   const inputRef = useRef(null);
   const reduce = useReducedMotion();
   const [dragging, setDragging] = useState(false);
+  const [rejected, setRejected] = useState("");
 
   function take(list) {
     const next = list?.[0];
-    if (next) onFile(next);
+    if (!next) return;
+
+    // sha256File reads the whole file into memory via arrayBuffer(), so an
+    // oversized file OOMs the tab before hashing starts. Refuse it here.
+    if (next.size > MAX_FILE_BYTES) {
+      setRejected(
+        `${next.name} is ${formatBytes(next.size)}. Maximum is ${formatBytes(MAX_FILE_BYTES)}.`
+      );
+      return;
+    }
+
+    setRejected("");
+    onFile(next);
   }
 
   const idle = !file && !dragging && !reduce;
@@ -91,6 +108,12 @@ export default function FileHashInput({
         className="hidden"
         onChange={(event) => take(event.target.files)}
       />
+
+      {rejected && (
+        <p className="mt-3 rounded-md border border-missing/30 bg-missing/[0.06] px-4 py-3 text-[13px] text-missing">
+          {rejected}
+        </p>
+      )}
 
       {fileHash && (
         <motion.div

@@ -55,9 +55,18 @@ export function WalletProvider({ children }) {
     [wallet, wallets.length]
   );
 
+  /**
+   * Clears the local session. Wallets have no programmatic disconnect - the
+   * extension keeps its own approval - so this forgets the account here and the
+   * user revokes the site in their wallet if they want it fully gone.
+   */
+  const disconnect = useCallback(() => {
+    setAccount("");
+  }, []);
+
   const value = useMemo(
-    () => ({ wallets, wallet, account, connect }),
-    [wallets, wallet, account, connect]
+    () => ({ wallets, wallet, account, connect, disconnect }),
+    [wallets, wallet, account, connect, disconnect]
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;

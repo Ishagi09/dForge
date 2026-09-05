@@ -1,15 +1,18 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import { CheckCircle2, ExternalLink, Loader2, Ban } from "lucide-react";
 import FileHashInput from "../components/FileHashInput";
-import PageShell from "../components/PageShell";
-import Verdict from "../components/Verdict";
-import WalletPicker from "../components/WalletPicker";
-import { DarkSection } from "../components/Section";
 import { Pill } from "../components/Pill";
 import { sha256File } from "../lib/hash";
 import { useWallet } from "../lib/useWallet";
 import { describeError, EXPLORER, getReadContract, shortHash } from "../lib/contract";
-import { formatTimestamp } from "../lib/status";
+import { formatTimestamp, STATUS_THEME } from "../lib/status";
+
+// Card classes are copied rather than shared: the Dashboard owns its own copy
+// and must not be refactored into a common component.
+const CARD = "rounded-lg border border-white/[0.07] bg-[#0E0E10]";
+const CARD_HEAD =
+  "flex items-center justify-between gap-4 border-b border-white/[0.06] px-5 py-4";
 
 // A certificate can be revoked only if it exists and is not already revoked.
 // Expired certificates are still revocable - expiry and revocation are independent.
@@ -20,23 +23,14 @@ const BLOCKED_REASON = {
   2: "This certificate has already been revoked. Revocation is permanent and cannot be undone.",
 };
 
-const list = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.07, delayChildren: 0.2 } },
-};
-
-const item = {
-  hidden: { opacity: 0, y: 10 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } },
-};
-
 export default function Revoke() {
-  const { wallets, wallet, account, connect } = useWallet();
+  const { wallets, wallet, account, connect, disconnect } = useWallet();
   const [file, setFile] = useState(null);
   const [fileHash, setFileHash] = useState("");
   const [busy, setBusy] = useState(false);
   const [lookup, setLookup] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [pendingTx, setPendingTx] = useState("");
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
 
@@ -46,7 +40,13 @@ export default function Revoke() {
     return { status: Number(status), certificateId, cert };
   }
 
+  // Each drop claims a ticket. A slower earlier run resuming after a newer one
+  // started must not write its hash or lookup over the newer file's.
+  const runId = useRef(0);
+
   async function onFile(selected) {
+    const id = ++runId.current;
+
     setError("");
     setResult(null);
     setLookup(null);
@@ -57,12 +57,17 @@ export default function Revoke() {
     setBusy(true);
     try {
       const hash = await sha256File(selected);
+      if (runId.current !== id) return;
       setFileHash(hash);
-      setLookup(await readStatus(hash));
+
+      const status = await readStatus(hash);
+      if (runId.current !== id) return;
+      setLookup(status);
     } catch (err) {
+      if (runId.current !== id) return;
       setError(describeError(err));
     } finally {
-      setBusy(false);
+      if (runId.current === id) setBusy(false);
     }
   }
 
@@ -82,6 +87,9 @@ export default function Revoke() {
     try {
       const contract = await connect();
       const tx = await contract.revokeByFileHash(fileHash);
+
+      setPendingTx(tx.hash); // display only - the call sequence is unchanged
+
       await tx.wait();
 
       setResult({ txHash: tx.hash });
@@ -89,136 +97,242 @@ export default function Revoke() {
     } catch (err) {
       setError(describeError(err));
     } finally {
+      setPendingTx("");
       setSubmitting(false);
     }
   }
 
   const canRevoke = lookup && REVOCABLE.has(lookup.status) && !submitting && !busy;
-
-  const resultSection = (
-    <AnimatePresence mode="wait">
-      {lookup && !busy && (
-        <motion.div
-          key={`${lookup.certificateId}-${lookup.status}`}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          <DarkSection className="py-20 sm:py-28">
-            <Verdict status={lookup.status} note={false} />
-
-            {lookup.status !== 0 && (
-              <motion.dl
-                variants={list}
-                initial="hidden"
-                animate="visible"
-                className="mt-14 grid grid-cols-1 gap-8 border-t border-white/12 pt-10 sm:grid-cols-2"
-              >
-                <motion.div variants={item}>
-                  <dt className="micro text-white/35">Recipient</dt>
-                  <dd className="mt-2 text-[14px] text-white/85">{lookup.cert.recipientName}</dd>
-                </motion.div>
-                <motion.div variants={item}>
-                  <dt className="micro text-white/35">Course</dt>
-                  <dd className="mt-2 text-[14px] text-white/85">{lookup.cert.courseName}</dd>
-                </motion.div>
-                <motion.div variants={item}>
-                  <dt className="micro text-white/35">Issued</dt>
-                  <dd className="mt-2 text-[14px] text-white/85">
-                    {formatTimestamp(lookup.cert.issuedAt)}
-                  </dd>
-                </motion.div>
-                <motion.div variants={item}>
-                  <dt className="micro text-white/35">Issuer</dt>
-                  <dd className="mt-2 break-all font-mono text-[11px] tracking-[0.06em] text-white/70">
-                    {lookup.cert.issuer}
-                  </dd>
-                </motion.div>
-              </motion.dl>
-            )}
-
-            <div className="mt-12 border-t border-white/12 pt-10">
-              {canRevoke ? (
-                <>
-                  <p className="max-w-md text-[14px] leading-relaxed text-white/50">
-                    Revoking is permanent. The certificate stays on the chain, but every future
-                    verification will report it as revoked.
-                  </p>
-                  <div className="mt-8">
-                    <Pill onClick={onRevoke} disabled={submitting}>
-                      {submitting ? "Revoking…" : "Revoke this certificate"}
-                    </Pill>
-                  </div>
-                </>
-              ) : (
-                <p className="max-w-md text-[14px] leading-relaxed text-white/50">
-                  {BLOCKED_REASON[lookup.status]}
-                </p>
-              )}
-
-              {result && (
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                  className="mt-10"
-                >
-                  <p className="micro text-white/35">Transaction</p>
-                  <a
-                    className="mt-2 inline-block break-all font-mono text-[11px] tracking-[0.06em] text-white/70 underline decoration-white/25 underline-offset-4 transition-colors hover:text-white"
-                    href={`${EXPLORER}/tx/${result.txHash}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {result.txHash}
-                  </a>
-                </motion.div>
-              )}
-            </div>
-          </DarkSection>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
+  const theme = lookup ? STATUS_THEME[lookup.status] : null;
 
   return (
-    <PageShell
-      micro="Revoke"
-      heading={
-        <>
-          Withdraw a record
-          <br />
-          you issued.
-        </>
-      }
-      result={resultSection}
-    >
-      <div className="border-b border-night/10 pb-8">
-        <WalletPicker
-          wallets={wallets}
-          wallet={wallet}
-          account={account}
-          onSelect={onSelectWallet}
-        />
-        {account && (
-          <p className="mt-4 font-mono text-[11px] tracking-[0.06em] text-night/55">
-            {shortHash(account, 6, 4)}
-          </p>
-        )}
-      </div>
-
-      <div className="mt-10">
-        <FileHashInput file={file} fileHash={fileHash} busy={busy} onFile={onFile} />
-      </div>
-
-      {busy && <p className="mt-6 text-[13px] text-night/50">Looking up on-chain…</p>}
-
-      {error && (
-        <p className="mt-6 border-l-2 border-night py-1 pl-4 text-[14px] leading-relaxed text-night/70">
-          {error}
+    <div className="px-6 py-7 sm:px-8">
+      <motion.header
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <p className="micro text-muted">Revoke</p>
+        <h1 className="mt-2.5 text-[26px] font-semibold tracking-tight">Revoke a certificate</h1>
+        <p className="mt-1.5 max-w-[76ch] text-[14px] text-muted">
+          Marks a certificate as withdrawn on-chain. The original issuance record stays permanently
+          visible.
         </p>
-      )}
-    </PageShell>
+      </motion.header>
+
+      <div className="mt-7 grid grid-cols-1 gap-4 lg:grid-cols-[1.55fr_1fr]">
+        {/* Left — lookup + action */}
+        <section className={CARD}>
+          <header className={CARD_HEAD}>
+            <h2 className="micro text-night">Document</h2>
+            {theme && (
+              <span
+                className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-[10.5px] font-medium uppercase tracking-wider"
+                style={{ color: theme.color, background: `${theme.color}14` }}
+              >
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: theme.color }} />
+                {theme.word}
+              </span>
+            )}
+          </header>
+
+          <div className="p-5">
+            {account ? (
+              <div className="mb-6 flex items-center justify-between gap-4 rounded-md border border-white/[0.07] bg-white/[0.02] px-4 py-3">
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-valid" />
+                  <span className="truncate font-mono text-[12.5px]">
+                    {shortHash(account, 6, 4)}
+                  </span>
+                  <span className="shrink-0 text-[11.5px] text-muted">
+                    {wallet?.info?.name ?? "Wallet"}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={disconnect}
+                  className="shrink-0 text-[11.5px] text-muted transition-colors hover:text-missing"
+                >
+                  Disconnect
+                </button>
+              </div>
+            ) : (
+              <div className="mb-6">
+                <p className="micro text-muted">
+                  {wallets.length === 0 ? "No wallet detected" : "Connect a wallet"}
+                </p>
+                {wallets.length === 0 ? (
+                  <p className="mt-2.5 text-[13px] text-muted">
+                    Install MetaMask, then reload this page.
+                  </p>
+                ) : (
+                  <div className="mt-2.5 flex flex-wrap gap-2">
+                    {wallets.map((entry) => (
+                      <button
+                        key={entry.info.uuid}
+                        type="button"
+                        onClick={() => onSelectWallet(entry)}
+                        className="flex items-center gap-2 rounded-md border border-white/[0.10] px-3 py-2 text-[13px] text-muted transition-colors hover:border-accent hover:text-night"
+                      >
+                        {entry.info.icon && (
+                          <img src={entry.info.icon} alt="" className="h-4 w-4" />
+                        )}
+                        {entry.info.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <FileHashInput file={file} fileHash={fileHash} busy={busy} onFile={onFile} />
+
+            {busy && <p className="mt-5 text-[13px] text-muted">Looking up on-chain…</p>}
+
+            {lookup && !busy && (
+              <div className="mt-6 border-t border-white/[0.06] pt-5">
+                {lookup.status !== 0 && (
+                  <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <dt className="text-[11px] text-muted">Recipient</dt>
+                      <dd className="mt-1.5 text-[13.5px]">{lookup.cert.recipientName}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] text-muted">Course</dt>
+                      <dd className="mt-1.5 text-[13.5px]">{lookup.cert.courseName}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] text-muted">Issued</dt>
+                      <dd className="mt-1.5 text-[13.5px]">
+                        {formatTimestamp(lookup.cert.issuedAt)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] text-muted">Issuer</dt>
+                      <dd className="mt-1.5 font-mono text-[12px]">
+                        {shortHash(lookup.cert.issuer, 6, 4)}
+                      </dd>
+                    </div>
+                  </dl>
+                )}
+
+                <div className="mt-5">
+                  {canRevoke ? (
+                    <>
+                      <p className="max-w-[60ch] text-[13px] leading-relaxed text-muted">
+                        Revoking is permanent. The certificate stays on the chain, but every future
+                        verification will report it as revoked.
+                      </p>
+                      <div className="mt-4">
+                        <Pill onClick={onRevoke} disabled={submitting}>
+                          {submitting ? "Revoking…" : "Revoke this certificate"}
+                        </Pill>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="max-w-[60ch] text-[13px] leading-relaxed text-muted">
+                      {BLOCKED_REASON[lookup.status]}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {error && (
+              <p className="mt-5 rounded-md border border-missing/30 bg-missing/[0.06] px-4 py-3 text-[13px] text-missing">
+                {error}
+              </p>
+            )}
+          </div>
+        </section>
+
+        {/* Right — transaction status */}
+        <section className={CARD}>
+          <header className={CARD_HEAD}>
+            <h2 className="micro text-night">Transaction</h2>
+          </header>
+
+          <AnimatePresence mode="wait">
+            {result ? (
+              <motion.dl
+                key="done"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-4 p-5"
+              >
+                <p className="flex items-center gap-2 text-[13.5px] text-valid">
+                  <CheckCircle2 size={15} strokeWidth={1.8} />
+                  Revocation confirmed
+                </p>
+                <p className="text-[12.5px] leading-relaxed text-muted">
+                  Verification of this document now reports it as revoked.
+                </p>
+                <div>
+                  <dt className="text-[11px] text-muted">Transaction</dt>
+                  <dd className="mt-1.5">
+                    <a
+                      href={`${EXPLORER}/tx/${result.txHash}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 break-all font-mono text-[12px] text-accent transition-opacity hover:opacity-80"
+                    >
+                      {shortHash(result.txHash, 10, 8)}
+                      <ExternalLink size={12.5} strokeWidth={1.7} />
+                    </a>
+                  </dd>
+                </div>
+              </motion.dl>
+            ) : submitting ? (
+              <motion.div
+                key="pending"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.25 }}
+                className="space-y-4 p-5"
+              >
+                <p className="flex items-center gap-2 text-[13.5px] text-accent">
+                  <Loader2 size={15} strokeWidth={1.8} className="animate-spin" />
+                  {pendingTx ? "Waiting for confirmation…" : "Awaiting wallet signature…"}
+                </p>
+                {pendingTx && (
+                  <div>
+                    <dt className="text-[11px] text-muted">Transaction</dt>
+                    <dd className="mt-1.5">
+                      <a
+                        href={`${EXPLORER}/tx/${pendingTx}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 break-all font-mono text-[12px] text-accent transition-opacity hover:opacity-80"
+                      >
+                        {shortHash(pendingTx, 10, 8)}
+                        <ExternalLink size={12.5} strokeWidth={1.7} />
+                      </a>
+                    </dd>
+                  </div>
+                )}
+              </motion.div>
+            ) : (
+              <motion.div
+                key="idle"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.25 }}
+                className="flex flex-col items-center justify-center px-5 py-14 text-center"
+              >
+                <Ban size={22} strokeWidth={1.5} className="text-muted/50" />
+                <p className="mt-3.5 text-[13.5px] text-muted">No transaction yet</p>
+                <p className="mt-1.5 max-w-[34ch] text-[12px] text-muted/60">
+                  Look up a certificate on the left, then revoke it to see the transaction here.
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </section>
+      </div>
+    </div>
   );
 }
