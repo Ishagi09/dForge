@@ -3,5 +3,6 @@
   "address": "0xa62ae72D24AFE719e923Bac1C716752437E498c2",
   "deployer": "0x0132bEB5A2c300D4F07253C499B11eA62bBF4e19",
   "txHash": "0xb7556dab38fb5e02b22c03c2c244b82384ffe00af02f155939b429dfae493f35",
-  "deployedAt": "2026-09-04T22:52:25.680Z"
+  "deployedAt": "2026-09-04T22:52:25.680Z",
+  "blockNumber": 11636435
 }

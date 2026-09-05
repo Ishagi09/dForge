@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import "./index.css";
 import App from "./App.jsx";
+import Dashboard from "./pages/Dashboard.jsx";
 import Issue from "./pages/Issue.jsx";
 import Revoke from "./pages/Revoke.jsx";
 import Verify from "./pages/Verify.jsx";
@@ -16,6 +17,7 @@ createRoot(document.getElementById("root")).render(
           <Route path="issue" element={<Issue />} />
           <Route path="verify" element={<Verify />} />
           <Route path="revoke" element={<Revoke />} />
+          <Route path="dashboard" element={<Dashboard />} />
           <Route path="*" element={<Navigate to="/verify" replace />} />
         </Route>
       </Routes>

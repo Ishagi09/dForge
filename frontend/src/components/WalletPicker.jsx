@@ -6,7 +6,7 @@
 export default function WalletPicker({ wallets, wallet, account, onSelect }) {
   return (
     <div>
-      <p className="micro text-ink/40">
+      <p className="micro text-night/40">
         {wallets.length === 0
           ? "No wallet detected"
           : account
@@ -15,7 +15,7 @@ export default function WalletPicker({ wallets, wallet, account, onSelect }) {
       </p>
 
       {wallets.length === 0 ? (
-        <p className="mt-3 text-[13px] text-ink/45">Install MetaMask, then reload this page.</p>
+        <p className="mt-4 text-[13px] text-night/50">Install MetaMask, then reload this page.</p>
       ) : (
         <div className="mt-4 flex flex-wrap gap-2">
           {wallets.map((entry) => {
@@ -25,17 +25,14 @@ export default function WalletPicker({ wallets, wallet, account, onSelect }) {
                 key={entry.info.uuid}
                 type="button"
                 onClick={() => onSelect(entry)}
-                className={`group relative flex items-center gap-2 overflow-hidden border px-4 py-2 text-[13px] transition-colors ${
-                  selected ? "border-ink/40 text-ink" : "border-ink/15 text-ink/55 hover:text-cream"
+                className={`group relative flex items-center gap-2 overflow-hidden rounded-full border px-4 py-2 text-[13px] font-medium transition-colors ${
+                  selected
+                    ? "border-neon bg-neon/10 text-night"
+                    : "border-night/15 text-night/55 hover:border-night/40 hover:text-night"
                 }`}
               >
-                {!selected && (
-                  <span className="absolute inset-0 origin-left scale-x-0 bg-ink transition-transform duration-300 ease-out group-hover:scale-x-100" />
-                )}
-                {entry.info.icon && (
-                  <img src={entry.info.icon} alt="" className="relative h-4 w-4" />
-                )}
-                <span className="relative">{entry.info.name}</span>
+                {entry.info.icon && <img src={entry.info.icon} alt="" className="h-4 w-4" />}
+                <span>{entry.info.name}</span>
               </button>
             );
           })}
@@ -43,7 +40,7 @@ export default function WalletPicker({ wallets, wallet, account, onSelect }) {
       )}
 
       {wallets.length > 1 && !account && (
-        <p className="mt-4 max-w-sm text-[13px] leading-relaxed text-ink/45">
+        <p className="mt-4 max-w-sm text-[13px] leading-relaxed text-night/50">
           More than one wallet extension is installed. Pick the one holding your issuer account.
         </p>
       )}

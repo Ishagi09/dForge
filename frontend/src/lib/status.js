@@ -2,16 +2,15 @@
  * Presentation for the contract's Status enum:
  * 0 NonExistent, 1 Valid, 2 Revoked, 3 Expired.
  *
- * Verdict colours are chosen for contrast against the cream ground, and are
- * deliberately distinct from the burnt-orange accent so the two never read as
- * the same signal.
+ * These are semantic colours and deliberately never the brand accent - a verdict
+ * must not be confusable with a button.
  */
 
 export const STATUS_THEME = {
-  0: { word: "Not found", color: "#A32118" },
-  1: { word: "Valid", color: "#1F6B4A" },
-  2: { word: "Revoked", color: "#8A5A0B" },
-  3: { word: "Expired", color: "#6B6660" },
+  0: { word: "NOT FOUND", color: "#EF4444", text: "text-missing" },
+  1: { word: "VALID", color: "#10B981", text: "text-valid" },
+  2: { word: "REVOKED", color: "#F59E0B", text: "text-revoked" },
+  3: { word: "EXPIRED", color: "#8B8B8B", text: "text-expired" },
 };
 
 export const STATUS_NOTES = {

@@ -3,6 +3,9 @@ import abi from "../contract/abi.json";
 import deployment from "../contract/deployment.json";
 
 export const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS || deployment.address;
+
+/** Log scans start here rather than at genesis - public RPCs will not serve that range. */
+export const DEPLOYMENT_BLOCK = Number(deployment.blockNumber ?? 0);
 export const SEPOLIA_CHAIN_ID = 11155111;
 const SEPOLIA_CHAIN_ID_HEX = "0xaa36a7";
 
@@ -113,6 +116,18 @@ export async function connectWallet(injected) {
   const signer = await provider.getSigner();
   const address = await signer.getAddress();
   return { address, contract: new Contract(CONTRACT_ADDRESS, abi, signer) };
+}
+
+/**
+ * Accounts this site is already authorized to see. Uses eth_accounts, which never
+ * prompts - so a read-only page can personalise without popping a wallet dialog.
+ */
+export async function silentAccounts(injected) {
+  try {
+    return (await injected.request({ method: "eth_accounts" })) ?? [];
+  } catch {
+    return [];
+  }
 }
 
 /** Turns contract custom errors and wallet rejections into readable text. */

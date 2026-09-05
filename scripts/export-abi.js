@@ -36,7 +36,15 @@ function main() {
   fs.writeFileSync(path.join(outDir, "abi.json"), JSON.stringify(abi, null, 2) + "\n");
   fs.writeFileSync(
     path.join(outDir, "deployment.json"),
-    JSON.stringify({ address: deployment.address, network: deployment.network }, null, 2) + "\n"
+    JSON.stringify(
+      {
+        address: deployment.address,
+        network: deployment.network,
+        blockNumber: deployment.blockNumber ?? 0,
+      },
+      null,
+      2
+    ) + "\n"
   );
 
   console.log(`Exported ABI (${abi.length} entries) and address ${deployment.address}`);

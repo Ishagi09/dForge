@@ -1,4 +1,4 @@
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 
 /** Splits a line into words that fade up one after another. */
 export default function StaggerWords({ text, startDelay = 0, step = 0.08, className = "" }) {

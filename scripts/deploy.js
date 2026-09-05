@@ -64,11 +64,14 @@ async function main() {
   }
 
   // Record the deployment so later scripts (and you) can find the address again.
+  // blockNumber matters: the dashboard starts its log scan there rather than at genesis.
+  const receipt = await contract.deploymentTransaction().wait();
   const record = {
     network: networkName,
     address,
     deployer: deployer.address,
     txHash: contract.deploymentTransaction().hash,
+    blockNumber: receipt.blockNumber,
     deployedAt: new Date().toISOString(),
   };
   const dir = path.join(__dirname, "..", "deployments");
