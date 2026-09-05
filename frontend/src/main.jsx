@@ -7,20 +7,23 @@ import Dashboard from "./pages/Dashboard.jsx";
 import Issue from "./pages/Issue.jsx";
 import Revoke from "./pages/Revoke.jsx";
 import Verify from "./pages/Verify.jsx";
+import { WalletProvider } from "./lib/WalletProvider.jsx";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<App />}>
-          <Route index element={<Navigate to="/verify" replace />} />
-          <Route path="issue" element={<Issue />} />
-          <Route path="verify" element={<Verify />} />
-          <Route path="revoke" element={<Revoke />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="*" element={<Navigate to="/verify" replace />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <WalletProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<App />}>
+            <Route index element={<Navigate to="/verify" replace />} />
+            <Route path="verify" element={<Verify />} />
+            <Route path="issue" element={<Issue />} />
+            <Route path="revoke" element={<Revoke />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="*" element={<Navigate to="/verify" replace />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </WalletProvider>
   </StrictMode>
 );

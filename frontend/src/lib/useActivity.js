@@ -46,6 +46,7 @@ async function queryChunked(contract, filter, from, to) {
  */
 export function useActivity() {
   const [rows, setRows] = useState([]);
+  const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -66,8 +67,11 @@ export function useActivity() {
       const revokedIds = new Set(revoked.map((event) => event.args.certificateId));
 
       // Issue dates come from block timestamps - one lookup per distinct block,
-      // not one per event.
-      const blocks = [...new Set(issued.map((event) => event.blockNumber))];
+      // not one per event. Revocation blocks are included so the activity feed
+      // can timestamp those too.
+      const blocks = [
+        ...new Set([...issued, ...revoked].map((event) => event.blockNumber)),
+      ];
       const stamps = new Map();
       for (const blockNumber of blocks) {
         const block = await provider.getBlock(blockNumber);
@@ -101,6 +105,29 @@ export function useActivity() {
 
       next.sort((a, b) => b.blockNumber - a.blockNumber);
       setRows(next);
+
+      // Merged feed of what actually happened on-chain, newest first.
+      const names = new Map(next.map((row) => [row.certificateId, row.recipientName]));
+      const feed = [
+        ...issued.map((event) => ({
+          kind: "issued",
+          certificateId: event.args.certificateId,
+          recipientName: event.args.recipientName,
+          blockNumber: event.blockNumber,
+          txHash: event.transactionHash,
+          at: stamps.get(event.blockNumber) ?? 0,
+        })),
+        ...revoked.map((event) => ({
+          kind: "revoked",
+          certificateId: event.args.certificateId,
+          recipientName: names.get(event.args.certificateId) ?? "",
+          blockNumber: event.blockNumber,
+          txHash: event.transactionHash,
+          at: stamps.get(event.blockNumber) ?? 0,
+        })),
+      ].sort((a, b) => b.blockNumber - a.blockNumber);
+
+      setEvents(feed);
     } catch (err) {
       setError(describeError(err));
     } finally {
@@ -112,5 +139,5 @@ export function useActivity() {
     load();
   }, [load]);
 
-  return { rows, loading, error, reload: load };
+  return { rows, events, loading, error, reload: load };
 }

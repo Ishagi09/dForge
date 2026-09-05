@@ -1,238 +1,195 @@
-import { AnimatePresence, motion } from "motion/react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
-import AuroraBackground from "./components/AuroraBackground";
+import { useState } from "react";
+import { motion } from "motion/react";
+import { NavLink, Outlet } from "react-router-dom";
+import {
+  BarChart3,
+  Ban,
+  ChevronsLeft,
+  FilePlus2,
+  LayoutDashboard,
+  Settings,
+  ShieldCheck,
+} from "lucide-react";
 import Cursor from "./components/Cursor";
-import GhostText from "./components/GhostText";
 import GrainOverlay from "./components/GrainOverlay";
-import HeroSeal from "./components/HeroSeal";
-import IsoStack from "./components/IsoStack";
-import Reveal, { DrawRule } from "./components/Reveal";
-import StaggerWords from "./components/StaggerWords";
-import StatusStrip from "./components/StatusStrip";
 import Wordmark from "./components/Wordmark";
-import { DotPattern } from "./components/ui/dot-pattern";
-import { DarkSection } from "./components/Section";
-import { Pill, TextAction } from "./components/Pill";
-import { CONTRACT_ADDRESS, EXPLORER } from "./lib/contract";
+import { Pill } from "./components/Pill";
+import { useWallet } from "./lib/WalletProvider";
+import { useBlockNumber } from "./lib/useBlockNumber";
+import { describeError, shortHash } from "./lib/contract";
 
-const HERO = {
-  "/verify": {
-    kicker: "Proof",
-    ghost: "VERIFY",
-    micro: "Verification",
-    lines: ["Prove a document", "is authentic"],
-    sub: "Hash any certificate in your browser and check it against the chain. No account, no upload, no trust in us.",
-    cta: "Verify a file",
-  },
-  "/issue": {
-    kicker: "Forge",
-    ghost: "ISSUE",
-    micro: "Issuance",
-    lines: ["Certify a document", "on-chain"],
-    sub: "Authorized issuers bind a file's hash to a permanent record that cannot be edited or backdated.",
-    cta: "Issue a certificate",
-  },
-  "/revoke": {
-    kicker: "Withdraw",
-    ghost: "REVOKE",
-    micro: "Revocation",
-    lines: ["Retire a record", "you issued"],
-    sub: "Revoke a certificate you issued. Every future check reports it as revoked, permanently.",
-    cta: "Revoke a certificate",
-  },
-  "/dashboard": {
-    kicker: "Ledger",
-    ghost: "ACTIVITY",
-    micro: "Activity",
-    lines: ["Everything this", "contract has issued"],
-    sub: "Rebuilt from on-chain events. Public, read-only, and current as of the latest block.",
-    cta: "View activity",
-  },
-};
+const ROUTES = [
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/verify", label: "Verify", icon: ShieldCheck },
+  { to: "/issue", label: "Issue", icon: FilePlus2 },
+  { to: "/revoke", label: "Revoke", icon: Ban },
+];
 
-function Tab({ to, children }) {
+// Listed in the reference but with no route behind them yet. Shown disabled
+// rather than hidden or wired to a dead link.
+const PLANNED = [
+  { label: "Analytics", icon: BarChart3 },
+  { label: "Settings", icon: Settings },
+];
+
+function NavItem({ to, label, icon: Icon, collapsed }) {
   return (
-    <NavLink to={to} className="group relative py-1.5">
+    <NavLink to={to} className="group relative block">
       {({ isActive }) => (
-        <>
-          <span
-            className={`micro transition-colors duration-200 ${
-              isActive ? "text-accent" : "text-muted group-hover:text-night"
-            }`}
-          >
-            {children}
-          </span>
-
-          <span className="absolute inset-x-0 -bottom-px h-px origin-left scale-x-0 bg-white/25 transition-transform duration-300 ease-out group-hover:scale-x-100" />
-
+        <div
+          className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-[13.5px] transition-colors duration-200 ${
+            isActive
+              ? "bg-accent/[0.09] text-accent"
+              : "text-muted hover:bg-white/[0.035] hover:text-night"
+          }`}
+        >
           {isActive && (
             <motion.span
-              layoutId="tab-underline"
-              className="absolute inset-x-0 -bottom-px h-px bg-accent"
+              layoutId="nav-active"
+              className="absolute inset-y-1 left-0 w-[2px] rounded-full bg-accent"
               transition={{ type: "spring", stiffness: 420, damping: 34 }}
             />
           )}
-        </>
+          <Icon size={17} strokeWidth={1.6} className="shrink-0" />
+          {!collapsed && <span>{label}</span>}
+        </div>
       )}
     </NavLink>
   );
 }
 
 export default function App() {
-  const location = useLocation();
-  const hero = HERO[location.pathname] ?? HERO["/verify"];
+  const { wallets, wallet, account, connect } = useWallet();
+  const { block, offline } = useBlockNumber();
+  const [collapsed, setCollapsed] = useState(false);
+  const [walletError, setWalletError] = useState("");
 
-  function toWork() {
-    document.getElementById("work")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  async function onConnect() {
+    setWalletError("");
+    try {
+      await connect(wallets[0]);
+    } catch (err) {
+      setWalletError(describeError(err));
+    }
   }
 
   return (
-    <div className="relative min-h-screen bg-ink">
-      <AuroraBackground />
-
-      <div className="pointer-events-none fixed inset-0 -z-10">
-        <DotPattern
-          width={26}
-          height={26}
-          cr={0.85}
-          className="text-white/[0.13] [mask-image:radial-gradient(72%_58%_at_50%_20%,white,transparent)]"
-        />
-      </div>
-
+    <div className="flex min-h-screen bg-ink text-night">
       <GrainOverlay />
       <Cursor />
 
-      <header className="sticky top-0 z-30 border-b border-white/[0.07] bg-ink/85 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-8 px-6 sm:px-10 lg:px-16">
-          <NavLink to="/verify" className="shrink-0">
-            <Wordmark />
-          </NavLink>
-
-          <nav className="flex flex-wrap items-center gap-6 sm:gap-8">
-            <Tab to="/verify">Verify</Tab>
-            <Tab to="/issue">Issue</Tab>
-            <Tab to="/revoke">Revoke</Tab>
-            <Tab to="/dashboard">Dashboard</Tab>
-          </nav>
+      <aside
+        className={`sticky top-0 flex h-screen shrink-0 flex-col border-r border-white/[0.07] bg-[#0C0C0E] transition-[width] duration-300 ${
+          collapsed ? "w-[72px]" : "w-[236px]"
+        }`}
+      >
+        <div className="px-5 pb-7 pt-6">
+          <Wordmark />
+          {!collapsed && <p className="micro mt-2 text-muted/60">Proof, not paperwork</p>}
         </div>
-      </header>
 
-      <DarkSection className="relative pb-[96px] pt-[64px] sm:pb-[128px] sm:pt-[96px]">
-        <GhostText word={hero.ghost} />
+        <nav className="flex-1 space-y-1 px-3">
+          {ROUTES.map((route) => (
+            <NavItem key={route.to} {...route} collapsed={collapsed} />
+          ))}
 
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={location.pathname}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-            className="relative grid grid-cols-1 items-center gap-[64px] lg:grid-cols-[1.1fr_0.9fr] lg:gap-[40px]"
-          >
-            <div>
-              <div className="flex items-center gap-4">
-                <span className="h-px w-10 bg-accent" />
-                <p className="micro text-muted">{hero.micro}</p>
+          <div className="!mt-5 border-t border-white/[0.06] pt-4">
+            {PLANNED.map(({ label, icon: Icon }) => (
+              <div
+                key={label}
+                title="Not available yet"
+                className="flex cursor-not-allowed items-center gap-3 rounded-md px-3 py-2.5 text-[13.5px] text-muted/35"
+              >
+                <Icon size={17} strokeWidth={1.6} className="shrink-0" />
+                {!collapsed && (
+                  <span className="flex w-full items-center justify-between">
+                    {label}
+                    <span className="micro text-muted/25">Soon</span>
+                  </span>
+                )}
               </div>
-
-              <motion.p
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.5, delay: 0.06, ease: [0.16, 1, 0.3, 1] }}
-                className="display mt-6 text-[13px] tracking-[0.42em] text-accent"
-              >
-                {hero.kicker}
-              </motion.p>
-
-              <h1 className="heading mt-5 max-w-2xl text-[clamp(2.25rem,5.2vw,4rem)]">
-                <StaggerWords text={hero.lines[0]} startDelay={0.12} />
-                <br />
-                <StaggerWords text={hero.lines[1]} startDelay={0.22} />
-              </h1>
-
-              <motion.p
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.55, delay: 0.42, ease: [0.16, 1, 0.3, 1] }}
-                className="mt-[24px] max-w-[52ch] text-[15px] leading-[1.7] text-muted"
-              >
-                {hero.sub}
-              </motion.p>
-
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.55, delay: 0.52, ease: [0.16, 1, 0.3, 1] }}
-                className="mt-[40px] flex flex-wrap items-center gap-8"
-              >
-                <Pill onClick={toWork}>{hero.cta}</Pill>
-                <TextAction
-                  as="a"
-                  href={`${EXPLORER}/address/${CONTRACT_ADDRESS}#code`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  View contract
-                </TextAction>
-              </motion.div>
-            </div>
-
-            <motion.div
-              initial={{ opacity: 0, scale: 0.94 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.9, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-              className="hidden lg:block"
-            >
-              <HeroSeal />
-            </motion.div>
-          </motion.div>
-        </AnimatePresence>
-      </DarkSection>
-
-      <Outlet />
-
-      <DarkSection className="py-[96px] pb-[128px]">
-        <DrawRule className="mb-[64px]" />
-
-        <Reveal>
-          <div className="flex items-center gap-4">
-            <span className="h-px w-10 bg-accent" />
-            <p className="micro text-muted">Why it holds</p>
+            ))}
           </div>
-        </Reveal>
+        </nav>
 
-        <div className="mt-[64px] grid grid-cols-1 items-center gap-[64px] lg:grid-cols-[0.85fr_1fr] lg:gap-[96px]">
-          <Reveal>
-            <IsoStack />
-          </Reveal>
-
-          <Reveal delay={0.1}>
-            <h2 className="heading text-[clamp(1.75rem,3.5vw,2.5rem)]">
-              A certificate is only as good as its proof
-            </h2>
-
-            <p className="mt-[24px] max-w-[52ch] text-[15px] leading-[1.7] text-muted">
-              Paper credentials are trivial to forge and a database can be quietly edited. Binding a
-              document's SHA-256 to an immutable record moves the proof out of the issuer's hands:
-              anyone holding the file can confirm it independently, and any change to a single byte
-              breaks the match.
-            </p>
-
-            <div className="mt-[40px]">
-              <Pill
-                as="a"
-                href={`${EXPLORER}/address/${CONTRACT_ADDRESS}#code`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Read the contract
-              </Pill>
+        <div className="px-3 pb-4">
+          {!collapsed && (
+            <div className="rounded-md border border-white/[0.07] bg-white/[0.02] p-3.5">
+              {account ? (
+                <>
+                  <p className="flex items-center gap-2 text-[11px] text-muted">
+                    <span className="h-1.5 w-1.5 rounded-full bg-valid" />
+                    Connected
+                  </p>
+                  <p className="mt-2 font-mono text-[12.5px] text-night">
+                    {shortHash(account, 6, 4)}
+                  </p>
+                  <p className="mt-2 text-[11px] text-muted">
+                    {wallet?.info?.name ?? "Wallet"} · Sepolia
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-[11px] text-muted">Not connected</p>
+                  <button
+                    type="button"
+                    onClick={onConnect}
+                    className="micro mt-2.5 w-full rounded-md border border-white/12 py-2 text-night transition-colors hover:border-accent hover:text-accent"
+                  >
+                    Connect
+                  </button>
+                </>
+              )}
             </div>
-          </Reveal>
-        </div>
-      </DarkSection>
+          )}
 
-      <StatusStrip />
+          <button
+            type="button"
+            onClick={() => setCollapsed((v) => !v)}
+            className="mt-3 flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-[13px] text-muted transition-colors hover:text-night"
+          >
+            <ChevronsLeft
+              size={16}
+              strokeWidth={1.6}
+              className={`shrink-0 transition-transform duration-300 ${collapsed ? "rotate-180" : ""}`}
+            />
+            {!collapsed && <span>Collapse</span>}
+          </button>
+        </div>
+      </aside>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-20 flex h-[60px] shrink-0 items-center justify-end gap-3 border-b border-white/[0.07] bg-ink/85 px-6 backdrop-blur-md sm:px-8">
+          <span className="flex items-center gap-2 rounded-md border border-white/[0.09] px-3 py-1.5 text-[12.5px] text-muted">
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${offline ? "bg-missing" : "bg-valid"}`}
+            />
+            Sepolia
+            <span className="tabular ml-1 font-mono text-[11px] text-muted/70">
+              {offline ? "offline" : block ? `#${block.toLocaleString()}` : "—"}
+            </span>
+          </span>
+
+          {account ? (
+            <span className="flex items-center gap-2 rounded-md border border-white/[0.09] px-3 py-1.5 font-mono text-[12.5px] text-night">
+              <span className="h-1.5 w-1.5 rounded-full bg-valid" />
+              {shortHash(account, 6, 4)}
+            </span>
+          ) : (
+            <Pill onClick={onConnect}>Connect wallet</Pill>
+          )}
+        </header>
+
+        {walletError && (
+          <p className="border-b border-missing/30 bg-missing/[0.06] px-6 py-2.5 text-[12.5px] text-missing sm:px-8">
+            {walletError}
+          </p>
+        )}
+
+        <main className="min-w-0 flex-1">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }
