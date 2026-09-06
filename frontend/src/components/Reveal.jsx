@@ -19,7 +19,7 @@ export default function Reveal({ children, delay = 0, y = 22, className = "" }) 
 export function DrawRule({ delay = 0, className = "" }) {
   return (
     <motion.div
-      className={`h-px origin-left bg-white/[0.12] ${className}`}
+      className={`h-px origin-left bg-line ${className}`}
       initial={{ scaleX: 0 }}
       whileInView={{ scaleX: 1 }}
       viewport={{ once: true, amount: 0.6 }}

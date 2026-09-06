@@ -1,32 +1,30 @@
 @import "tailwindcss";
 
 @theme {
-  /* Ground + surfaces. `paper` is the dark ground, `night` the light foreground,
-     so existing text-night / border-night utilities read correctly on dark. */
-  --color-ink: #0a0a0a;
-  --color-paper: #0a0a0a;
-  --color-surface: #121214;
-  --color-night: #ededed;
-  --color-muted: #8a8a8a;
+  /* Amber Retro, light. `ink`/`paper` stay the page ground and `night` the
+     primary text, so existing utilities keep their meaning after the flip. */
+  --color-ink: #fdf8f3;
+  --color-paper: #fdf8f3;
+  --color-card: #ffffff;
+  --color-secondary: #efe7dd;
+  --color-line: #e5ddd1;
+  --color-night: #1c1917;
+  --color-muted: #78716c;
 
-  /* Single brand accent: active nav, primary actions, links, key marks. */
-  --color-accent: #ff6b2c;
-  --color-accent-dim: #b8420f;
-  --color-neon: #ff6b2c;
+  /* Orange is a fill, never standalone text. */
+  --color-accent: #f26b1d;
+  --color-neon: #f26b1d;
 
-  /* Verdicts carry their own semantics and never borrow the brand accent. */
-  --color-valid: #10b981;
-  --color-missing: #ef4444;
-  --color-revoked: #f59e0b;
-  --color-expired: #8b8b8b;
+  /* Status colours are badge fills carrying white text. */
+  --color-valid: #15803d;
+  --color-revoked: #b45309;
+  --color-missing: #dc2626;
+  --color-expired: #78716c;
 
-  /* Three tiers, each with a job: Syncopate is the voice, Plex is the reading
-     face, JetBrains carries every hash and address. */
   --font-display: "Syncopate", "Arial Black", sans-serif;
-  --font-sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --font-sans: "Sora", "IBM Plex Sans", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
-  /* Deliberate vertical rhythm - every gap is one of these, nothing in between. */
   --space-hair: 8px;
   --space-tight: 16px;
   --space-step: 24px;
@@ -34,12 +32,12 @@
   --space-group: 64px;
   --space-band: 96px;
 
-  --radius-sharp: 4px;
+  --radius-sharp: 0.5rem;
 }
 
 html {
   background-color: var(--color-ink);
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
@@ -52,7 +50,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Syncopate is naturally wide; it needs air, never negative tracking. */
 .display {
   font-family: var(--font-display);
   font-weight: 700;
@@ -61,8 +58,6 @@ body {
   text-transform: uppercase;
 }
 
-/* Headings that must stay readable at length use Plex, tightened.
-   `.h-display` is kept as an alias so existing section headings inherit this. */
 .heading,
 .h-display {
   font-family: var(--font-sans);
@@ -76,31 +71,42 @@ body {
   font-size: 10px;
   font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.2em;
 }
 
 .sharp {
   border-radius: var(--radius-sharp);
 }
 
-/* Tabular figures stop counters from jittering as they change. */
 .tabular {
   font-variant-numeric: tabular-nums;
 }
 
-body.cursor-hidden,
-body.cursor-hidden * {
-  cursor: none;
+/* Interactive elements get the pointer; plain text keeps the default arrow.
+   Buttons do not get this from the browser, only anchors do. */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+a[href],
+label[for],
+summary,
+select {
+  cursor: pointer;
 }
 
-body.cursor-hidden input[type="text"],
-body.cursor-hidden input[type="datetime-local"],
-body.cursor-hidden textarea {
-  cursor: text;
+button:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
 }
 
-/* Grain is one rasterised tile nudged around on a step timer - cheap, and the
-   stepping is what makes it read as film rather than a static texture. */
+::selection {
+  background: color-mix(in oklab, var(--color-accent) 25%, transparent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
 @keyframes grain-shift {
   0%,
   100% {
@@ -123,15 +129,6 @@ body.cursor-hidden textarea {
 .grain {
   animation: grain-shift 1.4s steps(5) infinite;
   will-change: transform;
-}
-
-::selection {
-  background: color-mix(in oklab, var(--color-accent) 35%, transparent);
-}
-
-:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 3px;
 }
 
 @media (prefers-reduced-motion: reduce) {

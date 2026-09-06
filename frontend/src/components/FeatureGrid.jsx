@@ -44,7 +44,7 @@ export default function FeatureGrid() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.3 }}
           transition={{ duration: 0.45, delay: i * 0.06, ease: [0.16, 1, 0.3, 1] }}
-          className={`sharp group relative border border-white/[0.07] bg-surface/60 p-[24px] transition-colors duration-300 hover:border-white/15 ${entry.span}`}
+          className={`sharp group relative border border-line bg-secondary p-[24px] transition-colors duration-300 hover:border-line ${entry.span}`}
         >
           <div className="flex items-start justify-between gap-4">
             <IsoIcon variant={entry.icon} />

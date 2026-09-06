@@ -2,15 +2,15 @@
  * Presentation for the contract's Status enum:
  * 0 NonExistent, 1 Valid, 2 Revoked, 3 Expired.
  *
- * These are semantic colours and deliberately never the brand accent - a verdict
- * must not be confusable with a button.
+ * These are badge fill colours; the label on top of them is always white.
+ * They are never used as standalone text on the light ground.
  */
 
 export const STATUS_THEME = {
-  0: { word: "NOT FOUND", color: "#EF4444", text: "text-missing" },
-  1: { word: "VALID", color: "#10B981", text: "text-valid" },
-  2: { word: "REVOKED", color: "#F59E0B", text: "text-revoked" },
-  3: { word: "EXPIRED", color: "#8B8B8B", text: "text-expired" },
+  0: { word: "NOT FOUND", color: "#DC2626" },
+  1: { word: "VALID", color: "#15803D" },
+  2: { word: "REVOKED", color: "#B45309" },
+  3: { word: "EXPIRED", color: "#78716C" },
 };
 
 export const STATUS_NOTES = {

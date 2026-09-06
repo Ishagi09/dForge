@@ -10,9 +10,9 @@ import { formatTimestamp, STATUS_THEME } from "../lib/status";
 
 // Card classes are copied rather than shared: the Dashboard owns its own copy
 // and must not be refactored into a common component.
-const CARD = "rounded-lg border border-white/[0.07] bg-[#0E0E10]";
+const CARD = "rounded-lg border border-line bg-card";
 const CARD_HEAD =
-  "flex items-center justify-between gap-4 border-b border-white/[0.06] px-5 py-4";
+  "flex items-center justify-between gap-4 border-b border-line px-5 py-4";
 
 // A certificate can be revoked only if it exists and is not already revoked.
 // Expired certificates are still revocable - expiry and revocation are independent.
@@ -128,9 +128,9 @@ export default function Revoke() {
             {theme && (
               <span
                 className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-[10.5px] font-medium uppercase tracking-wider"
-                style={{ color: theme.color, background: `${theme.color}14` }}
+                style={{ background: theme.color, color: "#FFFFFF" }}
               >
-                <span className="h-1.5 w-1.5 rounded-full" style={{ background: theme.color }} />
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.85)" }} />
                 {theme.word}
               </span>
             )}
@@ -138,7 +138,7 @@ export default function Revoke() {
 
           <div className="p-5">
             {account ? (
-              <div className="mb-6 flex items-center justify-between gap-4 rounded-md border border-white/[0.07] bg-white/[0.02] px-4 py-3">
+              <div className="mb-6 flex items-center justify-between gap-4 rounded-md border border-line bg-secondary px-4 py-3">
                 <span className="flex min-w-0 items-center gap-2.5">
                   <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-valid" />
                   <span className="truncate font-mono text-[12.5px]">
@@ -172,7 +172,7 @@ export default function Revoke() {
                         key={entry.info.uuid}
                         type="button"
                         onClick={() => onSelectWallet(entry)}
-                        className="flex items-center gap-2 rounded-md border border-white/[0.10] px-3 py-2 text-[13px] text-muted transition-colors hover:border-accent hover:text-night"
+                        className="flex items-center gap-2 rounded-md border border-line px-3 py-2 text-[13px] text-muted transition-colors hover:border-accent hover:text-night"
                       >
                         {entry.info.icon && (
                           <img src={entry.info.icon} alt="" className="h-4 w-4" />
@@ -190,7 +190,7 @@ export default function Revoke() {
             {busy && <p className="mt-5 text-[13px] text-muted">Looking up on-chain…</p>}
 
             {lookup && !busy && (
-              <div className="mt-6 border-t border-white/[0.06] pt-5">
+              <div className="mt-6 border-t border-line pt-5">
                 {lookup.status !== 0 && (
                   <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
@@ -276,7 +276,7 @@ export default function Revoke() {
                       href={`${EXPLORER}/tx/${result.txHash}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 break-all font-mono text-[12px] text-accent transition-opacity hover:opacity-80"
+                      className="inline-flex items-center gap-1.5 break-all font-mono text-[12px] text-night underline decoration-line underline-offset-4 transition-colors hover:decoration-night"
                     >
                       {shortHash(result.txHash, 10, 8)}
                       <ExternalLink size={12.5} strokeWidth={1.7} />
@@ -293,7 +293,7 @@ export default function Revoke() {
                 transition={{ duration: 0.25 }}
                 className="space-y-4 p-5"
               >
-                <p className="flex items-center gap-2 text-[13.5px] text-accent">
+                <p className="flex items-center gap-2 text-[13.5px] text-night">
                   <Loader2 size={15} strokeWidth={1.8} className="animate-spin" />
                   {pendingTx ? "Waiting for confirmation…" : "Awaiting wallet signature…"}
                 </p>
@@ -305,7 +305,7 @@ export default function Revoke() {
                         href={`${EXPLORER}/tx/${pendingTx}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 break-all font-mono text-[12px] text-accent transition-opacity hover:opacity-80"
+                        className="inline-flex items-center gap-1.5 break-all font-mono text-[12px] text-night underline decoration-line underline-offset-4 transition-colors hover:decoration-night"
                       >
                         {shortHash(pendingTx, 10, 8)}
                         <ExternalLink size={12.5} strokeWidth={1.7} />

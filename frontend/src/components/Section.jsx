@@ -14,7 +14,7 @@ export function DarkSection({ children, className = "", id }) {
 
 export function LightSection({ children, className = "", id }) {
   return (
-    <section id={id} className={`relative w-full border-t border-white/[0.07] ${className}`}>
+    <section id={id} className={`relative w-full border-t border-line ${className}`}>
       <div className="relative mx-auto w-full max-w-6xl px-6 sm:px-10 lg:px-16">{children}</div>
     </section>
   );

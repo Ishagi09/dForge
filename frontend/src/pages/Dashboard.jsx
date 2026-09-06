@@ -30,14 +30,23 @@ function ago(seconds, now) {
   return `${Math.floor(d / 86400)}d ago`;
 }
 
-function Stat({ label, value, suffix, note, stroke, loading }) {
+function Stat({ label, value, suffix, note, dot, loading }) {
   return (
-    <div className="rounded-lg border border-white/[0.07] bg-[#0E0E10] px-6 py-[26px] transition-colors duration-200 hover:border-white/[0.13]">
+    <div className="rounded-lg border border-line bg-card px-6 py-[26px] transition-colors duration-200 hover:border-night/20">
       <p className="tabular text-[32px] font-semibold leading-none tracking-tight">
         {loading ? <span className="text-muted">—</span> : <CountUp value={value} />}
         {!loading && suffix && <span className="text-[21px] text-muted">{suffix}</span>}
       </p>
-      <p className="micro mt-3.5" style={{ color: stroke }}>
+      {/* Label stays muted. Per-metric colour is carried by a filled dot, so the
+          hue never appears as standalone type. */}
+      <p className="micro mt-3.5 flex items-center gap-2 text-muted">
+        {dot && (
+          <span
+            aria-hidden="true"
+            className="h-1.5 w-1.5 shrink-0 rounded-full"
+            style={{ background: dot }}
+          />
+        )}
         {label}
       </p>
       <p className="mt-3 text-[12px] text-muted">{loading ? " " : note}</p>
@@ -47,8 +56,8 @@ function Stat({ label, value, suffix, note, stroke, loading }) {
 
 function Panel({ title, action, children, className = "" }) {
   return (
-    <section className={`rounded-lg border border-white/[0.07] bg-[#0E0E10] ${className}`}>
-      <header className="flex items-center justify-between gap-4 border-b border-white/[0.06] px-5 py-4">
+    <section className={`rounded-lg border border-line bg-card ${className}`}>
+      <header className="flex items-center justify-between gap-4 border-b border-line px-5 py-4">
         <h2 className="micro text-night">{title}</h2>
         {action}
       </header>
@@ -113,12 +122,12 @@ export default function Dashboard() {
               </Suspense>
             </div>
 
-            <dl className="space-y-5 border-t border-white/[0.06] p-5 sm:border-l sm:border-t-0">
+            <dl className="space-y-5 border-t border-line p-5 sm:border-l sm:border-t-0">
               <div>
                 <dt className="text-[11px] text-muted">Contract</dt>
                 <dd className="mt-1.5">
                   <a
-                    className="font-mono text-[12.5px] text-night transition-colors hover:text-accent"
+                    className="font-mono text-[12.5px] text-night transition-colors hover:text-night"
                     href={`${EXPLORER}/address/${CONTRACT_ADDRESS}#code`}
                     target="_blank"
                     rel="noreferrer"
@@ -142,7 +151,7 @@ export default function Dashboard() {
         </Panel>
 
         <Panel title="Network status">
-          <dl className="divide-y divide-white/[0.05] px-5">
+          <dl className="divide-y divide-line px-5">
             {[
               ["Contract", <span className="text-valid">Active</span>],
               ["Network", "Sepolia testnet"],
@@ -159,7 +168,7 @@ export default function Dashboard() {
 
           <div className="px-5 pb-5 pt-1">
             <a
-              className="inline-flex items-center gap-1.5 text-[12.5px] text-accent transition-opacity hover:opacity-80"
+              className="inline-flex items-center gap-1.5 text-[12.5px] text-night underline decoration-line underline-offset-4 transition-colors hover:decoration-night"
               href={`${EXPLORER}/address/${CONTRACT_ADDRESS}`}
               target="_blank"
               rel="noreferrer"
@@ -176,21 +185,21 @@ export default function Dashboard() {
           label="Issued"
           value={stats.issued}
           note={`+${stats.newThisMonth} in 30 days`}
-          stroke="#FF6B2C"
+          dot="#F26B1D"
           loading={loading}
         />
         <Stat
           label="Active"
           value={stats.active}
           note="Valid and unexpired"
-          stroke="#10B981"
+          dot="#15803D"
           loading={loading}
         />
         <Stat
           label="Revoked"
           value={stats.revoked}
           note="Permanently withdrawn"
-          stroke={stats.revoked > 0 ? "#EF4444" : "#8A8A8A"}
+          dot="#B45309"
           loading={loading}
         />
         <Stat
@@ -198,7 +207,7 @@ export default function Dashboard() {
           value={stats.rate}
           suffix="%"
           note="Active of all issued"
-          stroke="#EDEDED"
+          dot="#1C1917"
           loading={loading}
         />
       </div>
@@ -221,7 +230,7 @@ export default function Dashboard() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[620px] border-collapse text-left">
               <thead>
-                <tr className="border-b border-white/[0.06]">
+                <tr className="border-b border-line">
                   {["Certificate", "Recipient", "Course", "Status", "Time"].map((h) => (
                     <th key={h} className="micro px-5 py-3 font-medium text-muted">
                       {h}
@@ -238,7 +247,7 @@ export default function Dashboard() {
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       transition={{ duration: 0.3, delay: Math.min(i * 0.04, 0.25) }}
-                      className="border-b border-white/[0.04] transition-colors hover:bg-white/[0.02]"
+                      className="border-b border-line transition-colors hover:bg-secondary"
                     >
                       <td className="px-5 py-3.5">
                         <span className="flex items-center gap-2.5">
@@ -253,11 +262,11 @@ export default function Dashboard() {
                       <td className="px-5 py-3.5">
                         <span
                           className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-[10.5px] font-medium uppercase tracking-wider"
-                          style={{ color: theme.color, background: `${theme.color}14` }}
+                          style={{ background: theme.color, color: "#FFFFFF" }}
                         >
                           <span
                             className="h-1.5 w-1.5 rounded-full"
-                            style={{ background: theme.color }}
+                            style={{ background: "rgba(255,255,255,0.85)" }}
                           />
                           {theme.word}
                         </span>
@@ -295,7 +304,7 @@ export default function Dashboard() {
                   initial={{ opacity: 0, x: -6 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.3, delay: Math.min(i * 0.05, 0.3) }}
-                  className="flex items-start gap-3 border-b border-white/[0.04] py-3.5 last:border-0"
+                  className="flex items-start gap-3 border-b border-line py-3.5 last:border-0"
                 >
                   <Icon size={15} strokeWidth={1.7} className="mt-0.5 shrink-0" color={colour} />
                   <div className="min-w-0 flex-1">
@@ -307,7 +316,7 @@ export default function Dashboard() {
                       href={`${EXPLORER}/tx/${entry.txHash}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="font-mono text-[11px] text-muted transition-colors hover:text-accent"
+                      className="font-mono text-[11px] text-muted transition-colors hover:text-night"
                     >
                       {shortHash(entry.txHash, 8, 6)}
                     </a>

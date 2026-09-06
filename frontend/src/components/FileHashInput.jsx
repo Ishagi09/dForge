@@ -65,7 +65,7 @@ export default function FileHashInput({
         className={`sharp relative block w-full overflow-hidden border px-6 py-[56px] text-center transition-colors duration-200 ${
           dragging
             ? "border-accent bg-accent/[0.07]"
-            : "border-white/[0.12] bg-surface/40 hover:border-white/25"
+            : "border-line bg-secondary hover:border-line"
         }`}
       >
         {/* Idle breathing: a slow accent wash so the zone reads as live, not inert. */}
@@ -93,7 +93,7 @@ export default function FileHashInput({
             </>
           ) : (
             <>
-              <span className="block text-[15px] text-night/80">
+              <span className="block text-[15px] text-night">
                 {dragging ? "Release to hash" : "Drop a file here"}
               </span>
               <span className="micro mt-[16px] block text-muted">or click to browse</span>
@@ -125,7 +125,7 @@ export default function FileHashInput({
           <p className="micro text-muted">SHA-256</p>
           <HashReveal
             value={fileHash}
-            className="mt-[8px] break-all font-mono text-[11px] leading-[1.9] tracking-[0.06em] text-accent/85"
+            className="mt-[8px] break-all font-mono text-[11px] leading-[1.9] tracking-[0.06em] text-night"
           />
         </motion.div>
       )}

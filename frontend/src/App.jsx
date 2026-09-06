@@ -2,7 +2,6 @@ import { useState } from "react";
 import { motion } from "motion/react";
 import { NavLink, Outlet } from "react-router-dom";
 import { Ban, ChevronsLeft, FilePlus2, LayoutDashboard, ShieldCheck } from "lucide-react";
-import Cursor from "./components/Cursor";
 import GrainOverlay from "./components/GrainOverlay";
 import Wordmark from "./components/Wordmark";
 import { Pill } from "./components/Pill";
@@ -22,10 +21,11 @@ function NavItem({ to, label, icon: Icon, collapsed }) {
     <NavLink to={to} className="group relative block">
       {({ isActive }) => (
         <div
-          className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-[13.5px] transition-colors duration-200 ${
+          // scale is a transform, so the lift never reflows or nudges neighbours.
+          className={`flex origin-left items-center gap-3 rounded-md px-3 py-2.5 text-[13.5px] transition-[transform,background-color,color] duration-150 ease-out hover:scale-[1.03] ${
             isActive
-              ? "bg-accent/[0.09] text-accent"
-              : "text-muted hover:bg-white/[0.035] hover:text-night"
+              ? "bg-accent text-white"
+              : "text-muted hover:bg-[#F5F0E8] hover:text-night"
           }`}
         >
           {isActive && (
@@ -61,10 +61,9 @@ export default function App() {
   return (
     <div className="flex min-h-screen bg-ink text-night">
       <GrainOverlay />
-      <Cursor />
 
       <aside
-        className={`sticky top-0 flex h-screen shrink-0 flex-col border-r border-white/[0.07] bg-[#0C0C0E] transition-[width] duration-300 ${
+        className={`sticky top-0 flex h-screen shrink-0 flex-col border-r border-line bg-card transition-[width] duration-300 ${
           collapsed ? "w-[72px]" : "w-[236px]"
         }`}
       >
@@ -82,7 +81,7 @@ export default function App() {
 
         <div className="px-3 pb-4">
           {!collapsed && (
-            <div className="rounded-md border border-white/[0.07] bg-white/[0.02] p-3.5">
+            <div className="rounded-md border border-line bg-secondary p-3.5">
               {account ? (
                 <>
                   <p className="flex items-center gap-2 text-[11px] text-muted">
@@ -102,7 +101,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={onConnect}
-                    className="micro mt-2.5 w-full rounded-md border border-white/12 py-2 text-night transition-colors hover:border-accent hover:text-accent"
+                    className="micro mt-2.5 w-full rounded-md border border-line py-2 text-night transition-colors hover:border-accent hover:text-night"
                   >
                     Connect
                   </button>
@@ -127,8 +126,8 @@ export default function App() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex h-[60px] shrink-0 items-center justify-end gap-3 border-b border-white/[0.07] bg-ink/85 px-6 backdrop-blur-md sm:px-8">
-          <span className="flex items-center gap-2 rounded-md border border-white/[0.09] px-3 py-1.5 text-[12.5px] text-muted">
+        <header className="sticky top-0 z-20 flex h-[60px] shrink-0 items-center justify-end gap-3 border-b border-line bg-card/85 px-6 backdrop-blur-md sm:px-8">
+          <span className="flex items-center gap-2 rounded-md border border-line px-3 py-1.5 text-[12.5px] text-muted">
             <span
               className={`h-1.5 w-1.5 rounded-full ${offline ? "bg-missing" : "bg-valid"}`}
             />
@@ -139,7 +138,7 @@ export default function App() {
           </span>
 
           {account ? (
-            <span className="flex items-center gap-2 rounded-md border border-white/[0.09] px-3 py-1.5 font-mono text-[12.5px] text-night">
+            <span className="flex items-center gap-2 rounded-md border border-line px-3 py-1.5 font-mono text-[12.5px] text-night">
               <span className="h-1.5 w-1.5 rounded-full bg-valid" />
               {shortHash(account, 6, 4)}
             </span>

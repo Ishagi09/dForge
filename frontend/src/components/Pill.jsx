@@ -6,7 +6,7 @@ export function Pill({ as = "button", className = "", children, disabled, ...pro
     <Tag
       disabled={disabled}
       className={`group sharp relative inline-flex items-center justify-center overflow-hidden px-6 py-3 transition-colors ${
-        disabled ? "cursor-not-allowed bg-white/10 text-white/30" : "bg-accent text-ink"
+        disabled ? "cursor-not-allowed bg-secondary text-muted" : "bg-accent text-white"
       } ${className}`}
       {...props}
     >

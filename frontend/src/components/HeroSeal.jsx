@@ -130,7 +130,7 @@ export default function HeroSeal() {
       </svg>
 
       {/* The hash resolving beneath */}
-      <p className="mt-2 break-all text-center font-mono text-[11px] leading-relaxed tracking-[0.12em] text-accent/70">
+      <p className="mt-2 break-all text-center font-mono text-[11px] leading-relaxed tracking-[0.12em] text-night">
         {hash}
       </p>
     </div>

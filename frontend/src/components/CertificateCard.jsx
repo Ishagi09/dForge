@@ -16,8 +16,8 @@ const item = {
 function Entry({ label, children }) {
   return (
     <motion.div variants={item}>
-      <dt className="micro text-white/35">{label}</dt>
-      <dd className="mt-2 text-[14px] text-white/85">{children}</dd>
+      <dt className="micro text-muted">{label}</dt>
+      <dd className="mt-2 text-[14px] text-night">{children}</dd>
     </motion.div>
   );
 }
@@ -42,9 +42,9 @@ export default function CertificateCard({ cert, certificateId }) {
         inactiveZone={0.55}
       />
 
-      <article className="sharp relative border border-white/[0.10] bg-ink/70">
-        <div className="border-b border-white/[0.08] px-7 py-9 sm:px-9">
-          <p className="micro text-white/35">Certificate of completion</p>
+      <article className="sharp relative border border-line bg-card">
+        <div className="border-b border-line px-7 py-9 sm:px-9">
+          <p className="micro text-muted">Certificate of completion</p>
 
           <motion.h3
             initial={{ opacity: 0, y: 12 }}
@@ -59,7 +59,7 @@ export default function CertificateCard({ cert, certificateId }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.48, duration: 0.4 }}
-            className="mt-5 text-[15px] text-white/60"
+            className="mt-5 text-[15px] text-muted"
           >
             {cert.courseName}
           </motion.p>
@@ -75,7 +75,7 @@ export default function CertificateCard({ cert, certificateId }) {
           <Entry label="Expires">{formatDate(cert.expiresAt)}</Entry>
           <Entry label="Issuer">
             <a
-              className="font-mono text-[11px] tracking-[0.06em] text-accent underline decoration-accent/40 underline-offset-4 transition-colors hover:decoration-accent"
+              className="font-mono text-[11px] tracking-[0.06em] text-night underline decoration-line underline-offset-4 transition-colors hover:decoration-night"
               href={`${EXPLORER}/address/${cert.issuer}`}
               target="_blank"
               rel="noreferrer"
@@ -92,9 +92,9 @@ export default function CertificateCard({ cert, certificateId }) {
           )}
         </motion.dl>
 
-        <div className="border-t border-white/[0.08] px-7 py-6 sm:px-9">
-          <p className="micro text-white/35">Certificate ID</p>
-          <p className="mt-2 break-all font-mono text-[11px] tracking-[0.06em] text-white/50">
+        <div className="border-t border-line px-7 py-6 sm:px-9">
+          <p className="micro text-muted">Certificate ID</p>
+          <p className="mt-2 break-all font-mono text-[11px] tracking-[0.06em] text-muted">
             {certificateId}
           </p>
         </div>

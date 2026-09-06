@@ -8,9 +8,9 @@ import { formatTimestamp, STATUS_THEME, ZERO_ADDRESS } from "../lib/status";
 
 // Card classes are copied rather than shared: the Dashboard owns its own copy
 // and must not be refactored into a common component.
-const CARD = "rounded-lg border border-white/[0.07] bg-[#0E0E10]";
+const CARD = "rounded-lg border border-line bg-card";
 const CARD_HEAD =
-  "flex items-center justify-between gap-4 border-b border-white/[0.06] px-5 py-4";
+  "flex items-center justify-between gap-4 border-b border-line px-5 py-4";
 
 function Row({ label, children, mono = false }) {
   return (
@@ -105,9 +105,9 @@ export default function Verify() {
             {theme && (
               <span
                 className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-[10.5px] font-medium uppercase tracking-wider"
-                style={{ color: theme.color, background: `${theme.color}14` }}
+                style={{ background: theme.color, color: "#FFFFFF" }}
               >
-                <span className="h-1.5 w-1.5 rounded-full" style={{ background: theme.color }} />
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.85)" }} />
                 {theme.word}
               </span>
             )}
@@ -143,7 +143,7 @@ export default function Verify() {
                 </Row>
 
                 {result.status === 0 ? (
-                  <p className="rounded-md border border-white/[0.07] bg-white/[0.02] px-4 py-3 text-[12.5px] leading-relaxed text-muted">
+                  <p className="rounded-md border border-line bg-secondary px-4 py-3 text-[12.5px] leading-relaxed text-muted">
                     No certificate on the chain carries this hash. The document was never issued, or
                     it has been altered since it was.
                   </p>
@@ -169,7 +169,7 @@ export default function Verify() {
                       href={`${EXPLORER}/address/${result.cert.issuer}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 pt-1 text-[12.5px] text-accent transition-opacity hover:opacity-80"
+                      className="inline-flex items-center gap-1.5 pt-1 text-[12.5px] text-night underline decoration-line underline-offset-4 transition-colors hover:decoration-night"
                     >
                       View issuer on Etherscan <ExternalLink size={13} strokeWidth={1.7} />
                     </a>
